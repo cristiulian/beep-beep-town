@@ -6,7 +6,13 @@ A 3D driving game in the browser starring a Toyota RAV4 (three.js + TypeScript +
 npm install
 npm run dev      # play at http://localhost:5173 (reachable from a tablet on the same Wi-Fi)
 npm run build    # static site in dist/, host anywhere
+npm test         # smoke test of the build in headless Chrome (run after build)
 ```
+
+## Hosting (free) and CI/CD
+`.github/workflows/deploy.yml` runs on every push and pull request: typecheck, build, smoke test.
+Pushes to `main` then deploy to GitHub Pages. One-time setup in the GitHub repo:
+**Settings → Pages → Build and deployment → Source: GitHub Actions**.
 
 ## Things to do
 - **Stars**: collect them around town, in the countryside and in mid-air over jumps (see the minimap).
