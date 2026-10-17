@@ -47,6 +47,56 @@ button {
 #hud > * {
   pointer-events: auto;
 }
+.hud-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.fuel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 24px;
+  padding: 4px 16px;
+}
+.gauge {
+  width: 90px;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+#fuel-bar {
+  height: 100%;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--go);
+  transition: width 0.2s;
+}
+.fuel.low #fuel-bar {
+  background: #e63946;
+}
+.fuel.low {
+  animation: pulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes pulse {
+  to {
+    transform: scale(1.08);
+  }
+}
+#minimap {
+  width: 150px;
+  height: 150px;
+  border-radius: 20px;
+  border: 4px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
+  background: #7ccf5a;
+}
+body.in-garage #minimap,
+body.in-garage #fuel {
+  display: none;
+}
 .hud-right {
   display: flex;
   gap: 12px;
@@ -157,7 +207,7 @@ body.in-garage #garage-btn {
   position: fixed;
   left: 50%;
   bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  width: min(640px, calc(100% - 32px));
+  width: min(720px, calc(100% - 32px));
   transform: translate(-50%, 140%);
   background: var(--panel);
   border-radius: 28px;
@@ -181,9 +231,19 @@ body.in-garage #garage-btn {
   margin: 8px 0;
 }
 .swatch-label {
-  flex: 0 0 96px;
+  flex: 0 0 120px;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+.swatch-label b {
   font-size: 20px;
   font-weight: 800;
+}
+.swatch-name {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.7;
 }
 .swatches {
   display: flex;
@@ -220,9 +280,33 @@ body.in-garage #garage-btn {
 }
 
 @media (max-width: 480px) {
+  .swatch-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    margin: 4px 0;
+  }
   .swatch-label {
-    flex-basis: 70px;
+    flex: none;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .garage-title {
+    font-size: 22px;
+  }
+  .swatch-label b {
     font-size: 16px;
+  }
+  .swatch-name {
+    font-size: 12px;
+  }
+  #minimap {
+    width: 110px;
+    height: 110px;
+  }
+  .gauge {
+    width: 60px;
   }
   .swatch {
     width: 30px;

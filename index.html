@@ -11,10 +11,14 @@
     <div id="app"></div>
 
     <div id="hud">
-      <div class="pill" id="stars">⭐ <span id="star-count">0</span></div>
+      <div class="hud-left">
+        <div class="pill" id="stars">⭐ <span id="star-count">0</span></div>
+        <div class="pill fuel" id="fuel" aria-label="Fuel">⛽<div class="gauge"><div id="fuel-bar"></div></div></div>
+        <canvas id="minimap" width="300" height="300" aria-label="Map"></canvas>
+      </div>
       <div class="hud-right">
         <button class="round horn" data-control="horn" aria-label="Honk">📯</button>
-        <button class="round" id="garage-btn" aria-label="Paint your car">🎨</button>
+        <button class="round" id="garage-btn" aria-label="Paint your RAV4">🎨</button>
         <button class="round" id="mute" aria-label="Sound on or off">🔊</button>
       </div>
     </div>

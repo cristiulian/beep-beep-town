@@ -93,4 +93,94 @@ export class Sound {
   click() {
     this.tone(1200, 0, 0.06, 'sine', 0.15);
   }
+
+  /** An oscillator whose pitch glides from f0 to f1, through an optional low-pass filter. */
+  private glide(f0: number, f1: number, start: number, dur: number, type: OscillatorType, vol: number, opts: { lp?: number; vibrato?: number } = {}) {
+    if (!this.ctx || !this.master) return;
+    const t = this.ctx.currentTime + start;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    if (opts.vibrato) {
+      const lfo = this.ctx.createOscillator();
+      const depth = this.ctx.createGain();
+      lfo.frequency.value = opts.vibrato;
+      depth.gain.value = f0 * 0.08;
+      lfo.connect(depth).connect(o.frequency);
+      lfo.start(t);
+      lfo.stop(t + dur + 0.05);
+    }
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.05);
+    g.gain.setValueAtTime(vol, t + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    let node: AudioNode = o;
+    if (opts.lp) {
+      const f = this.ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = opts.lp;
+      node = o.connect(f);
+    }
+    node.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+
+  private noise(start: number, dur: number, vol: number, freq: number) {
+    if (!this.ctx || !this.master) return;
+    const ctx = this.ctx;
+    const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.value = vol;
+    src.connect(f).connect(g).connect(this.master);
+    src.start(ctx.currentTime + start);
+  }
+
+  animal(kind: 'cow' | 'sheep' | 'pig' | 'duck') {
+    if (kind === 'cow') {
+      this.glide(150, 105, 0, 1.1, 'sawtooth', 0.2, { lp: 700, vibrato: 5 });
+    } else if (kind === 'sheep') {
+      this.glide(420, 380, 0, 0.7, 'sawtooth', 0.12, { lp: 1800, vibrato: 14 });
+    } else if (kind === 'pig') {
+      this.glide(260, 160, 0, 0.18, 'square', 0.1, { lp: 900 });
+      this.glide(240, 150, 0.25, 0.2, 'square', 0.1, { lp: 900 });
+    } else {
+      this.glide(620, 400, 0, 0.14, 'sawtooth', 0.1, { lp: 1500 });
+      this.glide(620, 400, 0.2, 0.14, 'sawtooth', 0.1, { lp: 1500 });
+    }
+  }
+
+  land(strength: number) {
+    this.noise(0, 0.25, Math.min(0.6, 0.15 + strength * 0.15), 300);
+  }
+
+  woosh() {
+    this.noise(0, 0.5, 0.15, 1200);
+  }
+
+  glug() {
+    for (let i = 0; i < 6; i++) this.glide(300 + i * 60, 600 + i * 80, i * 0.15, 0.1, 'sine', 0.12);
+  }
+
+  sputter() {
+    for (let i = 0; i < 4; i++) this.noise(i * 0.18, 0.1, 0.3, 200);
+  }
+
+  goodDriving() {
+    [659, 880, 1175].forEach((f, i) => this.tone(f, i * 0.1, 0.35, 'triangle', 0.22));
+  }
+
+  oops() {
+    this.tone(700, 0, 0.18, 'square', 0.08);
+    this.tone(520, 0.2, 0.25, 'square', 0.08);
+  }
 }
