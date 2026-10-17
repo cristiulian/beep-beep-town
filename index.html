@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Beep Beep Town</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="hud">
+      <div class="pill" id="stars">⭐ <span id="star-count">0</span></div>
+      <div class="hud-right">
+        <button class="round horn" data-control="horn" aria-label="Honk">📯</button>
+        <button class="round" id="garage-btn" aria-label="Paint your car">🎨</button>
+        <button class="round" id="mute" aria-label="Sound on or off">🔊</button>
+      </div>
+    </div>
+
+    <div id="banner"></div>
+
+    <div id="controls">
+      <div class="cluster">
+        <button class="ctl" data-control="left" aria-label="Turn left">◀</button>
+        <button class="ctl" data-control="right" aria-label="Turn right">▶</button>
+      </div>
+      <div class="cluster">
+        <button class="ctl reverse" data-control="reverse" aria-label="Back up">▼</button>
+        <button class="ctl gas" data-control="gas" aria-label="Go">▲</button>
+      </div>
+    </div>
+
+    <div id="garage">
+      <div class="garage-title">🎨 Paint your <span id="car-name"></span>!</div>
+      <div id="swatch-rows"></div>
+      <button id="drive-btn">Let's drive! 🚗</button>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
