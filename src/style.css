@@ -36,7 +36,9 @@ button {
 
 #hud {
   position: fixed;
-  inset: 16px 16px auto 16px;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -104,7 +106,9 @@ button {
 /* On-screen controls: only for touch devices. */
 #controls {
   position: fixed;
-  inset: auto 16px 20px 16px;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
   display: none;
   justify-content: space-between;
   align-items: flex-end;
@@ -152,7 +156,7 @@ body.in-garage #garage-btn {
 #garage {
   position: fixed;
   left: 50%;
-  bottom: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   width: min(640px, calc(100% - 32px));
   transform: translate(-50%, 140%);
   background: var(--panel);
