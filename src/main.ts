@@ -6,6 +6,7 @@ import { Axis, Traffic } from './traffic';
 import { Animals } from './animals';
 import { HALF, POND, RAMPS, ROAD_LINES, ROAD_W, TOWN, groundHeight, inPond, terrainHeight } from './terrain';
 import { Input } from './input';
+import { GuideLine, roadRoute } from './guide';
 import { Sound } from './sound';
 
 /** Real RAV4 factory colours first, then some fun ones. */
@@ -54,24 +55,28 @@ const colors: CarColors = { ...carDef.defaultColors, ...save.colors[carDef.id] }
 
 // ---------- Scene ----------
 const isTouch = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-// Phones and tablets have very dense screens; drawing fewer pixels keeps the game smooth.
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTouch ? 1.5 : 2));
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+// Retina and tablet screens have 4x the pixels; a resolution a bit under native looks the same
+// in a moving game and is far cheaper. The loop below lowers it further if frames run slow.
+const MAX_RATIO = Math.min(window.devicePixelRatio, isTouch ? 1.25 : 1.5);
+let pixelRatio = MAX_RATIO;
+renderer.setPixelRatio(pixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app')!.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9fdcff);
 scene.fog = new THREE.Fog(0x9fdcff, 90, 300);
 
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 700);
+// Far plane just past the fog: anything further is invisible anyway.
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 320);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x5a8f3c, 1.4));
 const sun = new THREE.DirectionalLight(0xffffff, 2.2);
 sun.castShadow = true;
 sun.shadow.mapSize.setScalar(isTouch ? 1024 : 2048);
-Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 160 });
+Object.assign(sun.shadow.camera, { left: -38, right: 38, top: 38, bottom: -38, near: 1, far: 140 });
 sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
 
@@ -80,6 +85,33 @@ const traffic = new Traffic(scene);
 const animals = new Animals(scene, world.colliders);
 const car = new Car(carDef, colors);
 scene.add(car.model.root);
+const guide = new GuideLine(scene);
+// Keeps the chevrons crisp far down the road instead of blurring out.
+(guide.mesh.material as THREE.MeshBasicMaterial).map!.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+const PUMP = { x: -13, z: 38 };
+// A big bobbing ⛽ over the station while the guide is on.
+const pumpMarker = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#e63946';
+  g.beginPath();
+  g.arc(64, 64, 60, 0, Math.PI * 2);
+  g.fill();
+  g.font = '72px sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('⛽', 64, 70);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, fog: false }));
+  sp.scale.setScalar(5);
+  sp.position.set(-13, 10, 41);
+  sp.renderOrder = 3;
+  sp.visible = false;
+  scene.add(sp);
+  return sp;
+})();
 
 const input = new Input();
 const sound = new Sound();
@@ -170,10 +202,15 @@ if (document.fullscreenEnabled) {
 
 // ---------- Fuel ----------
 let fuel = 1;
+let guideByTap = false;
 let lowWarned = false;
 let glugTimer = 0;
 const fuelBar = $('fuel-bar');
 const fuelPill = $('fuel');
+fuelPill.addEventListener('click', () => {
+  guideByTap = !guideByTap;
+  sound.click();
+});
 function refreshFuel() {
   fuelBar.style.width = `${Math.round(fuel * 100)}%`;
   fuelPill.classList.toggle('low', fuel < 0.25);
@@ -229,6 +266,14 @@ mapBase.width = mapBase.height = MS;
 }
 function drawMinimap(t: number) {
   mapCtx.drawImage(mapBase, 0, 0);
+  if (guide.mesh.visible && guide.route.length > 1) {
+    mapCtx.strokeStyle = '#1e9bff';
+    mapCtx.lineWidth = 5;
+    mapCtx.lineJoin = 'round';
+    mapCtx.beginPath();
+    guide.route.forEach((q, i) => (i ? mapCtx.lineTo(mx(q.x), mz(q.z)) : mapCtx.moveTo(mx(q.x), mz(q.z))));
+    mapCtx.stroke();
+  }
   mapCtx.font = '22px sans-serif';
   mapCtx.textAlign = 'center';
   mapCtx.textBaseline = 'middle';
@@ -392,6 +437,25 @@ function checkTraffic() {
   lastCore = core;
 }
 
+// ---------- Route to the gas station ----------
+const navChip = $('nav');
+const navDist = $('nav-dist');
+function updateGuide(dt: number, t: number) {
+  const p = car.position;
+  const atPumps = p.x > GAS_PUMPS.minX && p.x < GAS_PUMPS.maxX && p.z > GAS_PUMPS.minZ && p.z < GAS_PUMPS.maxZ;
+  if (fuel >= 1 && atPumps) guideByTap = false;
+  const on = (fuel < 0.25 || guideByTap) && !(atPumps && fuel >= 0.25);
+  guide.mesh.visible = pumpMarker.visible = on;
+  navChip.hidden = !on;
+  if (!on) return;
+  const here = { x: p.x, z: p.z };
+  const inStation = p.x > GAS.minX && p.x < GAS.maxX && p.z > GAS.minZ && p.z < GAS.maxZ;
+  const route = inStation ? [here, PUMP] : [...roadRoute(here, { x: 0, z: PUMP.z }), { x: -6, z: PUMP.z }, PUMP];
+  guide.set(route, dt);
+  navDist.textContent = String(Math.max(0, Math.round(guide.length / 5) * 5));
+  pumpMarker.position.y = 10 + Math.sin(t * 3) * 0.6;
+}
+
 // ---------- Loop ----------
 const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
@@ -418,10 +482,39 @@ refreshFuel();
 let simTime = 0;
 let override: { throttle: number; steer: number } | null = null;
 
-function frame() {
+// 120 Hz screens (MacBook Pro, iPad Pro) would otherwise render twice as often as needed.
+const FRAME_MS = 1000 / 60;
+let lastFrame = 0;
+let frameNo = 0;
+let slowFrames = 0, fastFrames = 0;
+function frame(now: number) {
+  requestAnimationFrame(frame);
+  const gap = now - lastFrame;
+  if (gap < FRAME_MS - 2) return;
+  lastFrame = now;
+  frameNo++;
   tick(Math.min(clock.getDelta(), 1 / 20));
   render();
-  requestAnimationFrame(frame);
+  adaptResolution(gap);
+}
+
+/** Drop the render resolution when frames come too slowly, and raise it again when there's headroom. */
+function adaptResolution(gap: number) {
+  if (document.hidden || gap > 250) return; // ignore pauses (tab switch, garage, etc.)
+  if (gap > 24) slowFrames++;
+  else if (gap < 19) fastFrames++;
+  if (slowFrames > 45) {
+    slowFrames = fastFrames = 0;
+    if (pixelRatio > 0.75) setRatio(pixelRatio - 0.25);
+  } else if (fastFrames > 300) {
+    slowFrames = fastFrames = 0;
+    if (pixelRatio < MAX_RATIO) setRatio(pixelRatio + 0.125);
+  }
+}
+function setRatio(r: number) {
+  pixelRatio = Math.max(0.75, Math.min(MAX_RATIO, r));
+  renderer.setPixelRatio(pixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
 function render() {
@@ -436,7 +529,7 @@ function render() {
     showCam.lookAt(0, 0.8, 0);
     renderer.render(showroom, showCam);
   } else {
-    drawMinimap(simTime);
+    if (frameNo % 3 === 0) drawMinimap(simTime); // 20 fps is plenty for the map
     renderer.render(scene, camera);
   }
 }
@@ -484,7 +577,7 @@ function tick(dt: number) {
   }
   if (fuel < 0.25 && !lowWarned) {
     lowWarned = true;
-    showBanner('⛽ Fuel is low! Find ⛽ on the map', 3.5, 2);
+    showBanner('⛽ Fuel is low! Follow the blue arrows', 3.5, 2);
   }
   const p = car.position;
   if (p.x > GAS_PUMPS.minX && p.x < GAS_PUMPS.maxX && p.z > GAS_PUMPS.minZ && p.z < GAS_PUMPS.maxZ && Math.abs(car.speed) < 1 && fuel < 1) {
@@ -501,6 +594,7 @@ function tick(dt: number) {
     } else showBanner('⛽ Filling up…', 0.5, 2);
   }
   refreshFuel();
+  updateGuide(dt, t);
 
   // Collect stars.
   for (const s of world.stars) {
@@ -565,7 +659,7 @@ window.addEventListener('resize', () => {
 
 // Handy for testing from the browser console.
 (window as unknown as { game: unknown }).game = {
-  car, world, traffic, animals, input,
+  car, world, traffic, animals, input, renderer, guide,
   setFuel: (f: number) => (fuel = f),
   /** Run the game at a steady 60 fps for `secs`, holding the given controls. Returns jump info. */
   sim(secs: number, throttle = 0, steer = 0) {

@@ -94,6 +94,7 @@ button {
   background: #7ccf5a;
 }
 body.in-garage #minimap,
+body.in-garage #nav,
 body.in-garage #fuel {
   display: none;
 }
@@ -132,9 +133,23 @@ body.in-garage #fuel {
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
 }
 
+/* Distance to the gas station while the guide line is showing. */
+.nav {
+  position: fixed;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 26px;
+  color: #0b6fb8;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.fuel {
+  cursor: pointer;
+}
 #banner {
   position: fixed;
-  top: 22%;
+  top: 24%;
   left: 50%;
   transform: translate(-50%, -20px) scale(0.8);
   max-width: calc(100% - 32px);

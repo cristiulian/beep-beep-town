@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Collider, resolveCircle } from './collide';
+import { flattenByMaterial } from './merge';
 
 export interface CarColors {
   body: string;
@@ -311,6 +312,10 @@ function buildRav4(): CarModel {
       if (zPos > 0) steerPivots.push(pivot);
     }
   }
+
+  // ~150 parts become one mesh per material (paint and light materials stay live for recolouring).
+  flattenByMaterial(shell);
+  for (const s of spinners) flattenByMaterial(s);
 
   return { root, body, paint, lights, steerPivots, spinners, wheelRadius: R };
 }

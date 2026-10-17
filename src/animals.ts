@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Collider } from './collide';
 import { POND, groundHeight } from './terrain';
+import { flattenByMaterial } from './merge';
 
 export type Species = 'cow' | 'sheep' | 'pig' | 'duck';
 
@@ -129,6 +130,11 @@ export class Animals {
     const herd = (species: Species, n: number, x: number, z: number, r: number) => {
       for (let i = 0; i < n; i++) {
         const { g, head, legs } = BUILDERS[species]();
+        // Merge each rigid part (body, head, each leg) so an animal is a few draw calls, not dozens.
+        head.userData.keep = true;
+        legs.forEach((l) => (l.userData.keep = true));
+        flattenByMaterial(g);
+        flattenByMaterial(head);
         const a = Math.random() * Math.PI * 2, d = Math.random() * r * 0.8;
         const pos = new THREE.Vector2(x + Math.cos(a) * d, z + Math.sin(a) * d);
         g.position.set(pos.x, groundHeight(pos.x, pos.y), pos.y);
@@ -170,6 +176,7 @@ export class Animals {
       a.soundCooldown -= dt;
       const dx = p.x - car.x, dz = p.z - car.z;
       const dCar = Math.hypot(dx, dz);
+      a.root.visible = dCar < 90; // tiny in the fog beyond this; skip drawing them
       if (dCar < 7) {
         if (a.flee <= 0 && a.soundCooldown <= 0) {
           this.onSound(a.species);

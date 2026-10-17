@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Collider, overlapsAny } from './collide';
+import { ColorBatch, flattenByMaterial } from './merge';
 import {
   AIR_SPOTS, HALF, POND, RAMPS, ROAD_LINES, ROAD_W, TOWN, buildTerrain, groundHeight, roadDist, terrainHeight,
 } from './terrain';
@@ -73,6 +74,8 @@ export function createWorld(scene: THREE.Scene): World {
   };
 
   buildTerrain(scene);
+  // Static props are collected here and merged into a few meshes at the end.
+  const props = new THREE.Group();
 
   // ---------- Roads ----------
   const roadMat = new THREE.MeshStandardMaterial({ color: 0x5a5f6a, roughness: 0.95 });
@@ -83,7 +86,7 @@ export function createWorld(scene: THREE.Scene): World {
       road.rotation.x = -Math.PI / 2;
       road.position.set(vertical ? l : 0, vertical ? 0.03 : 0.032, vertical ? 0 : l);
       road.receiveShadow = true;
-      scene.add(road);
+      props.add(road);
     }
   }
   const dashGeo = new THREE.PlaneGeometry(0.35, 2).rotateX(-Math.PI / 2);
@@ -128,7 +131,7 @@ export function createWorld(scene: THREE.Scene): World {
         const b = new THREE.Mesh(new THREE.BoxGeometry(ROAD_W + 2, 1.2, 0.4), barrierMat);
         b.position.set(vertical ? l : s * (HALF + 1), 0.9, vertical ? s * (HALF + 1) : l);
         if (!vertical) b.rotation.y = Math.PI / 2;
-        scene.add(b);
+        props.add(b);
       }
     }
   }
@@ -168,11 +171,12 @@ export function createWorld(scene: THREE.Scene): World {
   for (const x of [-3.8, 3.8]) {
     const b = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 4, 10), brushMat);
     b.position.set(x, 2.4, 0);
+    b.userData.keep = true;
     wash.add(b);
     brushes.push(b);
   }
   wash.position.set(0, 0, washZ);
-  scene.add(wash);
+  props.add(wash);
   const washZone = new THREE.Box3(new THREE.Vector3(-3, 0, washZ - 1.5), new THREE.Vector3(3, 5, washZ + 1.5));
 
   // ---------- Gas station ----------
@@ -181,26 +185,26 @@ export function createWorld(scene: THREE.Scene): World {
     const slab = new THREE.Mesh(new THREE.BoxGeometry(GAS.maxX - GAS.minX, 0.1, GAS.maxZ - GAS.minZ), new THREE.MeshStandardMaterial({ color: 0xb8bcc4 }));
     slab.position.set((GAS.minX + GAS.maxX) / 2, 0.05, (GAS.minZ + GAS.maxZ) / 2);
     slab.receiveShadow = true;
-    scene.add(slab);
+    props.add(slab);
     const red = new THREE.MeshStandardMaterial({ color: 0xe63946 });
     const white = new THREE.MeshStandardMaterial({ color: 0xffffff });
     const canopy = new THREE.Mesh(new THREE.BoxGeometry(14, 0.8, 12), white);
     canopy.position.set(cx, 5, cz);
     canopy.castShadow = true;
-    scene.add(canopy);
+    props.add(canopy);
     const band = new THREE.Mesh(new THREE.BoxGeometry(14.1, 0.35, 12.1), red);
     band.position.set(cx, 4.75, cz);
-    scene.add(band);
+    props.add(band);
     for (const [px, pz] of [[-6.5, -5.5], [6.5, -5.5], [-6.5, 5.5], [6.5, 5.5]]) {
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 5, 10), white);
       post.position.set(cx + px, 2.5, cz + pz);
-      scene.add(post);
+      props.add(post);
       colliders.push({ kind: 'circle', x: cx + px, z: cz + pz, r: 0.3 });
     }
     // Pump island with two pumps.
     const island = new THREE.Mesh(new THREE.BoxGeometry(7, 0.3, 1.4), new THREE.MeshStandardMaterial({ color: 0xffd60a }));
     island.position.set(cx, 0.2, cz);
-    scene.add(island);
+    props.add(island);
     boxCollider(cx, cz, 7, 1.4);
     for (const dx of [-2, 2]) {
       const pump = new THREE.Group();
@@ -214,31 +218,31 @@ export function createWorld(scene: THREE.Scene): World {
       pump.add(bodyM, screen, hose);
       pump.position.set(cx + dx, 0.3, cz);
       pump.traverse((o) => (o.castShadow = true));
-      scene.add(pump);
+      props.add(pump);
     }
     // Shop.
     const shop = new THREE.Mesh(new THREE.BoxGeometry(7, 4, 14), new THREE.MeshStandardMaterial({ color: 0xf1faee }));
     shop.position.set(-26, 2, cz);
     shop.castShadow = true;
-    scene.add(shop);
+    props.add(shop);
     const shopWin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.6, 10), new THREE.MeshStandardMaterial({ color: 0x8ecae6, metalness: 0.5, roughness: 0.1 }));
     shopWin.position.set(-22.45, 2, cz);
-    scene.add(shopWin);
+    props.add(shopWin);
     const shopSign = signBoard('SHOP', '#e63946', '#ffffff', 0.2, 1.2);
     (shopSign.geometry as THREE.BoxGeometry).dispose();
     shopSign.geometry = new THREE.BoxGeometry(0.2, 1.2, 5);
     shopSign.position.set(-22.4, 3.5, cz);
-    scene.add(shopSign);
+    props.add(shopSign);
     boxCollider(-26, cz, 7, 14);
     // Tall roadside sign.
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 8, 8), white);
     pole.position.set(-7, 4, 53);
-    scene.add(pole);
+    props.add(pole);
     colliders.push({ kind: 'circle', x: -7, z: 53, r: 0.3 });
     const gasSign = signBoard('GAS', '#e63946', '#ffffff', 4, 2);
     gasSign.position.set(-7, 8.5, 53);
     gasSign.rotation.y = Math.PI / 2;
-    scene.add(gasSign);
+    props.add(gasSign);
   }
 
   // ---------- Stunt park: concrete pad, cones and signs ----------
@@ -249,7 +253,7 @@ export function createWorld(scene: THREE.Scene): World {
     );
     pad.position.set((PARK.minX + PARK.maxX) / 2, 0.02, (PARK.minZ + PARK.maxZ) / 2);
     pad.receiveShadow = true;
-    scene.add(pad);
+    props.add(pad);
     const coneMat = new THREE.MeshStandardMaterial({ color: 0xff6b00 });
     const coneGeo = new THREE.ConeGeometry(0.3, 0.8, 10);
     for (let x = PARK.minX + 1; x <= PARK.maxX - 1; x += 4) {
@@ -258,27 +262,27 @@ export function createWorld(scene: THREE.Scene): World {
         const c = new THREE.Mesh(coneGeo, coneMat);
         c.position.set(x, 0.4, z);
         c.castShadow = true;
-        scene.add(c);
+        props.add(c);
       }
     }
   }
   {
     const s = signBoard('STUNT PARK', '#ff7b00', '#ffffff', 8, 1.8);
     s.position.set(12, 4.5, -6.5);
-    scene.add(s);
+    props.add(s);
     for (const x of [8.6, 15.4]) {
       const p = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 4.5, 8), new THREE.MeshStandardMaterial({ color: 0x444444 }));
       p.position.set(x, 2.25, -6.5);
-      scene.add(p);
+      props.add(p);
       colliders.push({ kind: 'circle', x, z: -6.5, r: 0.25 });
     }
     const big = signBoard('BIG JUMP!', '#ff7b00', '#ffffff', 7, 1.6);
     big.position.set(8.5, 4, 85);
     big.rotation.y = Math.PI;
-    scene.add(big);
+    props.add(big);
     const bp = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 4, 8), new THREE.MeshStandardMaterial({ color: 0x444444 }));
     bp.position.set(8.5, 2, 85);
-    scene.add(bp);
+    props.add(bp);
     colliders.push({ kind: 'circle', x: 8.5, z: 85, r: 0.25 });
   }
 
@@ -309,7 +313,7 @@ export function createWorld(scene: THREE.Scene): World {
     g.add(silo, dome);
     g.traverse((o) => (o.castShadow = true));
     g.position.set(BARN.x, terrainHeight(BARN.x, BARN.z), BARN.z);
-    scene.add(g);
+    props.add(g);
     boxCollider(BARN.x, BARN.z, 10, 8);
     colliders.push({ kind: 'circle', x: BARN.x + 7.5, z: BARN.z, r: 2 });
     // Hay bales.
@@ -318,7 +322,7 @@ export function createWorld(scene: THREE.Scene): World {
       const b = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1.2, 14).rotateZ(Math.PI / 2), hay);
       b.position.set(hx, terrainHeight(hx, hz) + 0.8, hz);
       b.castShadow = true;
-      scene.add(b);
+      props.add(b);
       colliders.push({ kind: 'circle', x: hx, z: hz, r: 0.8 });
     }
   }
@@ -330,47 +334,36 @@ export function createWorld(scene: THREE.Scene): World {
     }
   }
 
-  // ---------- Houses (town only) ----------
+  flattenByMaterial(props);
+  scene.add(props);
+
+  // ---------- Houses (town only): merged into one vertex-coloured mesh ----------
   const roofGeo = new THREE.ConeGeometry(1, 1, 4).rotateY(Math.PI / 4);
-  const doorMat = new THREE.MeshStandardMaterial({ color: 0x8d5524 });
-  const winMat = new THREE.MeshStandardMaterial({ color: 0x8ecae6, roughness: 0.2, metalness: 0.3 });
+  const unitBox = new THREE.BoxGeometry(1, 1, 1);
+  const houseBatch = new ColorBatch();
   for (let i = 0; i < 320; i++) {
     const w = 5 + rand() * 4, d = 5 + rand() * 4, h = 3 + rand() * 3;
     const x = (rand() * 2 - 1) * (TOWN - 4), z = (rand() * 2 - 1) * (TOWN - 4);
     const r = Math.max(w, d) / 2 + 2;
     if (roadDist(x, z) < ROAD_W / 2 + r || overlapsAny(x, z, r, colliders) || Math.hypot(x, z) < 15) continue;
     if ([PARK, GAS].some((rc) => inRect(rc, x, z, r))) continue;
-    const house = new THREE.Group();
-    const walls = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: HOUSE_COLORS[Math.floor(rand() * HOUSE_COLORS.length)] }));
-    walls.position.y = h / 2;
-    const roof = new THREE.Mesh(roofGeo, new THREE.MeshStandardMaterial({ color: ROOF_COLORS[Math.floor(rand() * ROOF_COLORS.length)] }));
-    roof.scale.set(w * 0.78, 2.2, d * 0.78);
-    roof.position.y = h + 1.1;
-    const front = new THREE.Group();
-    const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 0.1), doorMat);
-    door.position.y = 1;
-    front.add(door);
-    for (const wx of [-1.6, 1.6]) {
-      const win = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.1), winMat);
-      win.position.set(wx, Math.min(h - 0.9, 1.8), 0);
-      front.add(win);
-    }
-    // Face the front towards the nearest road.
+    houseBatch.add(unitBox, HOUSE_COLORS[Math.floor(rand() * HOUSE_COLORS.length)], { x, y: h / 2, z }, 0, { x: w, y: h, z: d });
+    houseBatch.add(roofGeo, ROOF_COLORS[Math.floor(rand() * ROOF_COLORS.length)], { x, y: h + 1.1, z }, 0, { x: w * 0.78, y: 2.2, z: d * 0.78 });
+    // Door and two windows on the side facing the nearest road.
     const nx = ROAD_LINES.reduce((a, b) => (Math.abs(b - x) < Math.abs(a - x) ? b : a));
     const nz = ROAD_LINES.reduce((a, b) => (Math.abs(b - z) < Math.abs(a - z) ? b : a));
-    if (Math.abs(nx - x) < Math.abs(nz - z)) {
-      front.rotation.y = Math.PI / 2;
-      front.position.set(Math.sign(nx - x) * (w / 2 + 0.05), 0, 0);
-    } else {
-      front.position.set(0, 0, Math.sign(nz - z) * (d / 2 + 0.05));
-    }
-    walls.castShadow = roof.castShadow = true;
-    walls.receiveShadow = true;
-    house.add(walls, roof, front);
-    house.position.set(x, 0, z);
-    scene.add(house);
+    const sideX = Math.abs(nx - x) < Math.abs(nz - z);
+    const face = (along: number, y: number, sw: number, sh: number, color: number) => {
+      const pos = sideX
+        ? { x: x + Math.sign(nx - x) * (w / 2 + 0.05), y, z: z + along }
+        : { x: x + along, y, z: z + Math.sign(nz - z) * (d / 2 + 0.05) };
+      houseBatch.add(unitBox, color, pos, sideX ? Math.PI / 2 : 0, { x: sw, y: sh, z: 0.1 });
+    };
+    face(0, 1, 1.2, 2, 0x8d5524);
+    for (const wx of [-1.6, 1.6]) face(wx, Math.min(h - 0.9, 1.8), 0.9, 0.9, 0x8ecae6);
     houses.push(boxCollider(x, z, w, d));
   }
+  scene.add(houseBatch.build(new THREE.MeshStandardMaterial({ roughness: 0.85 })));
 
   // ---------- Trees ----------
   const trunkGeo = new THREE.CylinderGeometry(0.25, 0.35, 1.6, 8);

@@ -13,7 +13,7 @@
     <div id="hud">
       <div class="hud-left">
         <div class="pill" id="stars">⭐ <span id="star-count">0</span></div>
-        <div class="pill fuel" id="fuel" aria-label="Fuel">⛽<div class="gauge"><div id="fuel-bar"></div></div></div>
+        <div class="pill fuel" id="fuel" role="button" tabindex="0" aria-label="Fuel: tap to show the way to the gas station">⛽<div class="gauge"><div id="fuel-bar"></div></div></div>
         <canvas id="minimap" width="300" height="300" aria-label="Map"></canvas>
       </div>
       <div class="hud-right">
@@ -24,6 +24,7 @@
       </div>
     </div>
 
+    <div class="pill nav" id="nav" hidden>⛽ <span id="nav-dist">0</span> m</div>
     <div id="banner"></div>
 
     <div id="controls">
