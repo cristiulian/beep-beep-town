@@ -142,7 +142,7 @@ body.in-garage #fuel {
   background: var(--panel);
   border-radius: 24px;
   padding: 10px 28px;
-  font-size: clamp(22px, 5vw, 40px);
+  font-size: clamp(18px, min(5vw, 6vh), 40px);
   font-weight: 800;
   opacity: 0;
   transition: all 0.3s;
@@ -153,18 +153,18 @@ body.in-garage #fuel {
   transform: translate(-50%, 0) scale(1);
 }
 
-/* On-screen controls: only for touch devices. */
+/* On-screen driving buttons: always shown, so the game works on tablets, phones and with a mouse. */
 #controls {
+  --btn: clamp(64px, min(19vw, 20vh), 112px);
   position: fixed;
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   left: max(16px, env(safe-area-inset-left, 0px));
   right: max(16px, env(safe-area-inset-right, 0px));
-  display: none;
+  display: flex;
   justify-content: space-between;
   align-items: flex-end;
-}
-body.touch #controls {
-  display: flex;
+  pointer-events: none;
+  touch-action: none;
 }
 body.in-garage #controls,
 body.in-garage #garage-btn {
@@ -172,28 +172,38 @@ body.in-garage #garage-btn {
 }
 .cluster {
   display: flex;
-  gap: 14px;
+  gap: 12px;
+  pointer-events: auto;
 }
 .ctl {
-  width: clamp(64px, 18vw, 100px);
-  height: clamp(64px, 18vw, 100px);
+  width: var(--btn);
+  height: var(--btn);
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.85);
-  font-size: clamp(30px, 8vw, 44px);
+  font-size: calc(var(--btn) * 0.42);
   box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
   touch-action: none;
+  -webkit-touch-callout: none;
 }
 .ctl.pressed {
   transform: translateY(4px) scale(0.96);
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+  filter: brightness(0.92);
 }
 .ctl.gas {
   background: var(--go);
   color: white;
-  height: clamp(92px, 26vw, 140px);
+  height: calc(var(--btn) * 1.4);
 }
 .ctl.reverse {
   background: #ffb4a2;
+}
+/* With a mouse the buttons are a backup to the keyboard, so keep them out of the way. */
+@media (pointer: fine) {
+  #controls {
+    --btn: 64px;
+    opacity: 0.8;
+  }
 }
 .round.horn {
   background: #ffd60a;
@@ -319,5 +329,33 @@ body.in-garage #garage-btn {
   }
   .pill {
     font-size: 28px;
+  }
+}
+
+/* Phones held sideways: shrink the top-left HUD so it clears the steering buttons. */
+@media (max-height: 500px) {
+  .hud-left {
+    gap: 6px;
+  }
+  .pill {
+    font-size: 22px;
+    padding: 2px 14px;
+  }
+  .fuel {
+    font-size: 18px;
+  }
+  .gauge {
+    width: 60px;
+  }
+  #minimap {
+    width: 96px;
+    height: 96px;
+    border-width: 3px;
+    border-radius: 14px;
+  }
+  .round {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
   }
 }

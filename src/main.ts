@@ -53,8 +53,10 @@ const carDef = CARS.find((c) => c.id === save.carId) ?? CARS[0];
 const colors: CarColors = { ...carDef.defaultColors, ...save.colors[carDef.id] };
 
 // ---------- Scene ----------
+const isTouch = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// Phones and tablets have very dense screens; drawing fewer pixels keeps the game smooth.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTouch ? 1.5 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -68,7 +70,7 @@ const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerH
 scene.add(new THREE.HemisphereLight(0xffffff, 0x5a8f3c, 1.4));
 const sun = new THREE.DirectionalLight(0xffffff, 2.2);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.setScalar(isTouch ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 160 });
 sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
@@ -153,9 +155,18 @@ muteBtn.addEventListener('click', () => {
 });
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => sound.unlock(), { once: true });
 
-const isTouch = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 document.body.classList.toggle('touch', isTouch);
-if (!isTouch) showBanner('Arrow keys to drive · Space to honk', 4);
+showBanner(isTouch ? 'Hold ▲ to go, ◀ ▶ to steer, 📯 to honk' : 'Arrow keys or the buttons to drive · Space to honk', 4);
+
+// Full screen hides the browser bars on tablets (not every device allows it).
+const fsBtn = $('fullscreen');
+if (document.fullscreenEnabled) {
+  fsBtn.hidden = false;
+  fsBtn.addEventListener('click', () => {
+    const req = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    req?.catch(() => (fsBtn.hidden = true));
+  });
+}
 
 // ---------- Fuel ----------
 let fuel = 1;
@@ -443,7 +454,10 @@ function tick(dt: number) {
   const water = inPond(car.position.x, car.position.z);
   const speedScale = (fuel <= 0 ? 0.3 : 1) * (water ? 0.45 : 1);
   const ev = car.update(dt, override?.throttle ?? input.throttle, override?.steer ?? input.steer, { colliders: world.colliders, ground: groundHeight, speedScale });
-  if (ev.bump > 2) sound.boing();
+  if (ev.bump > 2) {
+    sound.boing();
+    navigator.vibrate?.(40);
+  }
   if (ev.landed > 0.25) sound.land(ev.landed);
   if (ev.landed > 0.8) {
     burst(car.position.clone().setY(car.position.y + 0.3), 0xffffff, 14, 6);
@@ -551,7 +565,7 @@ window.addEventListener('resize', () => {
 
 // Handy for testing from the browser console.
 (window as unknown as { game: unknown }).game = {
-  car, world, traffic, animals,
+  car, world, traffic, animals, input,
   setFuel: (f: number) => (fuel = f),
   /** Run the game at a steady 60 fps for `secs`, holding the given controls. Returns jump info. */
   sim(secs: number, throttle = 0, steer = 0) {

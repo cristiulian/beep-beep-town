@@ -17,7 +17,7 @@ npm run build    # static site in dist/, host anywhere
 - **Garage (🎨)**: paint body, roof and wheels in real RAV4 colours (Lunar Rock, Ruby Flare, Blueprint…) or fun ones.
 - **Car wash**: drive through it for a surprise colour.
 
-Controls: arrow keys / WASD, Space to honk. Touch screens get on-screen pedals.
+Controls: on-screen buttons on every device (hold ▲ to go, slide a thumb between ◀ ▶ to steer, 📯 to honk), or arrow keys / WASD and Space. The ⛶ button goes full screen where the browser allows it.
 
 ## Code map
 - `src/car.ts` – the RAV4 model (built from code) and driving physics (hills, jumps, collisions)
