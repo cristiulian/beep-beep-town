@@ -23,6 +23,7 @@ Pushes to `main` then deploy to GitHub Pages. One-time setup in the GitHub repo:
 - **Farm and countryside**: hills, cows, pigs and sheep that run from the car (honk at them!), and a duck pond to splash through.
 - **Garage (🎨)**: paint body, roof and wheels in real RAV4 colours (Lunar Rock, Ruby Flare, Blueprint…) or fun ones.
 - **Car wash**: drive through it for a surprise colour.
+- **Town traffic**: 10 cars (taxi, school bus, police car, delivery truck, sports car…) drive around town in the right-hand lane, each heading to a destination and then picking a new one. They stop at red lights, give way at crossings (left turns wait for oncoming cars), queue behind each other and behind you, and honk if you block them.
 
 Controls: on-screen buttons on every device (hold ▲ to go, slide a thumb between ◀ ▶ to steer, 📯 to honk), or arrow keys / WASD and Space. The ⛶ button goes full screen where the browser allows it.
 
@@ -30,6 +31,8 @@ Controls: on-screen buttons on every device (hold ▲ to go, slide a thumb betwe
 - `src/car.ts` – the RAV4 model (built from code) and driving physics (hills, jumps, collisions)
 - `src/terrain.ts` – hills, pond, ramps, ground height
 - `src/world.ts` – roads, houses, trees, gas station, car wash, farm, stars
+- `src/vehicles.ts` – library of town vehicle models (`tools/vehicles-preview.html` shows them all)
+- `src/citytraffic.ts` – town traffic: routing, lanes, lights, right of way, following distance
 - `src/guide.ts` – road-network shortest path and the chevron guide line
 - `src/traffic.ts`, `src/animals.ts`, `src/sound.ts` (all sounds are synthesized)
 - `tools/car-preview.html` – the car from four angles, for working on the model

@@ -4,6 +4,7 @@ import { Car, CarColors, CARS } from './car';
 import { BARN, FARM, GAS, GAS_PUMPS, PARK, createWorld } from './world';
 import { Axis, Traffic } from './traffic';
 import { Animals } from './animals';
+import { CityTraffic } from './citytraffic';
 import { HALF, POND, RAMPS, ROAD_LINES, ROAD_W, TOWN, groundHeight, inPond, terrainHeight } from './terrain';
 import { Input } from './input';
 import { GuideLine, roadRoute } from './guide';
@@ -83,6 +84,7 @@ scene.add(sun, sun.target);
 const world = createWorld(scene);
 const traffic = new Traffic(scene);
 const animals = new Animals(scene, world.colliders);
+const city = new CityTraffic(scene, traffic, world.colliders, 10);
 const car = new Car(carDef, colors);
 scene.add(car.model.root);
 const guide = new GuideLine(scene);
@@ -122,6 +124,7 @@ input.onHorn = () => {
   animals.scare(car.position, 25);
 };
 animals.onSound = (s) => sound.animal(s);
+city.onHonk = (pos) => sound.carHorn(pos.distanceTo(car.position));
 
 // ---------- Sparkle particles ----------
 interface Particle { mesh: THREE.Mesh; vel: THREE.Vector3; life: number; }
@@ -292,6 +295,13 @@ function drawMinimap(t: number) {
     mapCtx.arc(mx(s.position.x), mz(s.position.z), 5, 0, Math.PI * 2);
     mapCtx.fill();
     mapCtx.stroke();
+  }
+  // Town traffic as small dark dots.
+  mapCtx.fillStyle = '#2b2d42';
+  for (const c of city.cars) {
+    mapCtx.beginPath();
+    mapCtx.arc(mx(c.obj.position.x), mz(c.obj.position.z), 3.5, 0, Math.PI * 2);
+    mapCtx.fill();
   }
   // The car: an arrow pointing where it's heading.
   const ang = Math.atan2(-Math.cos(car.heading), -Math.sin(car.heading));
@@ -546,6 +556,7 @@ function tick(dt: number) {
 
   const water = inPond(car.position.x, car.position.z);
   const speedScale = (fuel <= 0 ? 0.3 : 1) * (water ? 0.45 : 1);
+  city.update(dt, car.position);
   const ev = car.update(dt, override?.throttle ?? input.throttle, override?.steer ?? input.steer, { colliders: world.colliders, ground: groundHeight, speedScale });
   if (ev.bump > 2) {
     sound.boing();
@@ -659,7 +670,7 @@ window.addEventListener('resize', () => {
 
 // Handy for testing from the browser console.
 (window as unknown as { game: unknown }).game = {
-  car, world, traffic, animals, input, renderer, guide,
+  car, world, traffic, animals, input, renderer, guide, city,
   setFuel: (f: number) => (fuel = f),
   /** Run the game at a steady 60 fps for `secs`, holding the given controls. Returns jump info. */
   sim(secs: number, throttle = 0, steer = 0) {

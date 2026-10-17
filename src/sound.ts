@@ -179,6 +179,16 @@ export class Sound {
     [659, 880, 1175].forEach((f, i) => this.tone(f, i * 0.1, 0.35, 'triangle', 0.22));
   }
 
+  /** Another car's horn; quieter the further away it is. */
+  carHorn(distance: number) {
+    const v = Math.max(0, 1 - distance / 40) * 0.09;
+    if (v <= 0.005) return;
+    this.tone(523, 0, 0.16, 'square', v);
+    this.tone(659, 0, 0.16, 'square', v * 0.8);
+    this.tone(523, 0.22, 0.2, 'square', v);
+    this.tone(659, 0.22, 0.2, 'square', v * 0.8);
+  }
+
   oops() {
     this.tone(700, 0, 0.18, 'square', 0.08);
     this.tone(520, 0.2, 0.25, 'square', 0.08);

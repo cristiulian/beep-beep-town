@@ -26,10 +26,10 @@ export interface CarDef {
   build: () => CarModel;
 }
 
-type V2 = [number, number];
+export type V2 = [number, number];
 
 /** Points along an arc (used for wheel wells), from angle a0 to a1. */
-function arc(cx: number, cy: number, r: number, a0: number, a1: number, n = 10): V2[] {
+export function arc(cx: number, cy: number, r: number, a0: number, a1: number, n = 10): V2[] {
   const pts: V2[] = [];
   for (let i = 0; i <= n; i++) {
     const a = a0 + ((a1 - a0) * i) / n;
@@ -42,7 +42,7 @@ function arc(cx: number, cy: number, r: number, a0: number, a1: number, n = 10):
  * Side profile (x = length with the nose at +x, y = height) extruded across the width.
  * `shapeZ` narrows the width per vertex, for tumblehome and rounded corners.
  */
-function extrudeProfile(
+export function extrudeProfile(
   points: V2[],
   width: number,
   mat: THREE.Material,
@@ -80,7 +80,7 @@ function frontDecal(points: V2[], mat: THREE.Material, x: number, depth = 0.03) 
   return m;
 }
 
-function box(w: number, h: number, d: number, mat: THREE.Material, x: number, y: number, z: number) {
+export function box(w: number, h: number, d: number, mat: THREE.Material, x: number, y: number, z: number) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.position.set(x, y, z);
   m.castShadow = true;

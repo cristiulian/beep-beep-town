@@ -43,6 +43,18 @@ try {
   });
   check(guide.visible && guide.length > 100 && guide.length < 160, `fuel guide shows a sensible route (${Math.round(guide.length)} m)`);
 
+  const traffic = await page.evaluate(() => {
+    const g = window.game;
+    g.car.position.set(115, 0, -110); // park the player out of town
+    g.sim(120);
+    return { cars: g.city.cars.length, ...g.city.stats };
+  });
+  check(traffic.cars === 10, `10 town cars (${traffic.cars})`);
+  check(traffic.metres > 3000 && traffic.tripsDone > 10, `traffic keeps moving (${Math.round(traffic.metres)} m, ${traffic.tripsDone} trips)`);
+  check(traffic.redLightsRun === 0, `town cars stop for red lights (${traffic.redLightsRun} run)`);
+  check(traffic.overlaps === 0, `town cars never drive into each other (${traffic.overlaps})`);
+  check(traffic.longestWait < 45, `no traffic jams (longest wait ${traffic.longestWait.toFixed(1)}s)`);
+
   const calls = await page.evaluate(
     () =>
       new Promise((resolve) => {
