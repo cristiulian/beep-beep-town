@@ -22,8 +22,9 @@ Pushes to `main` then deploy to GitHub Pages. One-time setup in the GitHub repo:
 - **Route guide**: when fuel is low, Forza-style blue chevrons on the road show the shortest way to the pumps (with distance at the top). Tap the fuel gauge to show or hide it any time.
 - **Farm and countryside**: hills, cows, pigs and sheep that run from the car (honk at them!), and a duck pond to splash through.
 - **Garage (🎨)**: paint body, roof and wheels in real RAV4 colours (Lunar Rock, Ruby Flare, Blueprint…) or fun ones.
+- **Garage** (across the road from the gas station, 🔧 on the map): drive into the bay and stop to pick a different vehicle — the RAV4 or any of the 9 town vehicles, each with its own handling (the sports coupe is fast, the school bus slow and wide). The 🎨 button paints anywhere and can show the way to the garage.
 - **Car wash**: drive through it for a surprise colour.
-- **Town traffic**: 10 cars (taxi, school bus, police car, delivery truck, sports car…) drive around town in the right-hand lane, each heading to a destination and then picking a new one. They stop at red lights, give way at crossings (left turns wait for oncoming cars), queue behind each other and behind you, and honk if you block them.
+- **Town traffic**: 10 cars (taxi, school bus, police car, delivery truck, sports car…) drive around town in the right-hand lane, each heading to a destination and then picking a new one. They stop at red lights, give way at crossings (left turns wait for oncoming cars), queue behind each other and behind you, and honk if you block them. Cut one off and it gives you an angry honk and flashes its headlights.
 
 Controls: on-screen buttons on every device (hold ▲ to go, slide a thumb between ◀ ▶ to steer, 📯 to honk), or arrow keys / WASD and Space. The ⛶ button goes full screen where the browser allows it.
 

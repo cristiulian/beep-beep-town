@@ -189,6 +189,15 @@ export class Sound {
     this.tone(659, 0.22, 0.2, 'square', v * 0.8);
   }
 
+  /** A long, cross double honk from a car you cut off. */
+  angryHorn(distance: number) {
+    const v = Math.max(0.03, 1 - distance / 50) * 0.14;
+    for (const [start, dur] of [[0, 0.25], [0.32, 0.7]]) {
+      this.tone(415, start, dur, 'square', v);
+      this.tone(466, start, dur, 'square', v * 0.8);
+    }
+  }
+
   oops() {
     this.tone(700, 0, 0.18, 'square', 0.08);
     this.tone(520, 0.2, 0.25, 'square', 0.08);

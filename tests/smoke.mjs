@@ -55,6 +55,50 @@ try {
   check(traffic.overlaps === 0, `town cars never drive into each other (${traffic.overlaps})`);
   check(traffic.longestWait < 45, `no traffic jams (longest wait ${traffic.longestWait.toFixed(1)}s)`);
 
+  const garage = await page.evaluate(() => {
+    const g = window.game;
+    // Drive off the main road into the garage bay and stop.
+    g.car.position.set(2.5, 0, 44);
+    g.car.heading = Math.PI / 2;
+    g.car.speed = 0;
+    g.sim(1.6, 1);
+    g.sim(2.5, -1);
+    return { atShop: g.atShop };
+  });
+  check(garage.atShop, 'stopping in the garage bay opens the car picker');
+  await page.click('.car-card[data-car=bus]');
+  await page.click('#drive-btn');
+  const swapped = await page.evaluate(() => {
+    const g = window.game;
+    const r = g.sim(3, 1);
+    return { id: g.car.def.id, speed: r.speed, x: r.pos[0] };
+  });
+  check(swapped.id === 'bus' && swapped.speed > 5 && swapped.x < 10, `swapped to the school bus and drove out (${swapped.id}, x=${swapped.x})`);
+
+  const cutOff = await page.evaluate(() => {
+    const g = window.game;
+    const pick = () => g.city.cars.find((c) => c.s < c.hop.straight - 25 && c.speed > 7 && c.angryCooldown <= 0);
+    let c = pick();
+    for (let k = 0; !c && k < 40; k++) {
+      g.sim(0.5);
+      c = pick();
+    }
+    if (!c) return { found: false };
+    const fx = Math.sin(c.heading), fz = Math.cos(c.heading);
+    // Swerve across its lane 7 m in front of it.
+    g.car.position.set(c.obj.position.x + fx * 7 - fz * 5, 0, c.obj.position.z + fz * 7 + fx * 5);
+    g.car.heading = c.heading + Math.PI / 2;
+    g.car.speed = 8;
+    const before = g.city.stats.cutOffs;
+    let flashed = false;
+    for (let i = 0; i < 40; i++) {
+      g.sim(1 / 30, 1);
+      flashed ||= c.flash > 0;
+    }
+    return { found: true, cut: g.city.stats.cutOffs - before, flashed };
+  });
+  check(cutOff.found && cutOff.cut === 1 && cutOff.flashed, `a car you cut off honks and flashes (${JSON.stringify(cutOff)})`);
+
   const calls = await page.evaluate(
     () =>
       new Promise((resolve) => {

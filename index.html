@@ -24,7 +24,7 @@
       </div>
     </div>
 
-    <div class="pill nav" id="nav" hidden>⛽ <span id="nav-dist">0</span> m</div>
+    <div class="pill nav" id="nav" hidden><span id="nav-icon">⛽</span> <span id="nav-dist">0</span> m</div>
     <div id="banner"></div>
 
     <div id="controls">
@@ -39,7 +39,9 @@
     </div>
 
     <div id="garage">
-      <div class="garage-title">🎨 Paint your <span id="car-name"></span>!</div>
+      <div class="garage-title" id="garage-title">🎨 Paint your <span id="car-name"></span>!</div>
+      <div class="car-picker" id="car-picker" role="radiogroup" aria-label="Choose your car"></div>
+      <button class="swap-hint" id="swap-hint">🔧 Want a different car? Show me the way to the Garage</button>
       <div id="swatch-rows"></div>
       <button id="drive-btn">Let's drive! 🚗</button>
     </div>

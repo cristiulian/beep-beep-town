@@ -111,16 +111,25 @@ interface Npc {
   blockedByPlayer: number;
   /** Has been let into the crossing ahead (holds it until through). */
   claimed: boolean;
+  /** Seconds since the player was last in front of us in our lane. */
+  playerAwayFor: number;
+  angryCooldown: number;
+  /** Seconds left of flashing the headlights. */
+  flash: number;
+  headlights: THREE.MeshStandardMaterial;
+  glows: THREE.Sprite[];
   colliders: Extract<Collider, { kind: 'circle' }>[];
 }
 
 export class CityTraffic {
   cars: Npc[] = [];
   /** Running totals, used by the automated tests to check the rules are kept. */
-  stats = { redLightsRun: 0, overlaps: 0, tripsDone: 0, metres: 0, longestWait: 0 };
+  stats = { redLightsRun: 0, overlaps: 0, tripsDone: 0, metres: 0, longestWait: 0, cutOffs: 0 };
   debug: unknown[] | null = null;
   /** Called when a car has been stuck behind the player for a while. */
   onHonk: (pos: THREE.Vector3) => void = () => {};
+  /** Called when the player cuts in front of a car so it has to brake. */
+  onCutOff: (car: { name: string; pos: THREE.Vector3 }) => void = () => {};
 
   constructor(scene: THREE.Scene, private lights: Traffic, colliders: Collider[], count = 10) {
     // A mix that always includes the fun ones.
@@ -160,10 +169,36 @@ export class CityTraffic {
       return {
         model, obj, from, to, plan, hop, s, speed: 0, cruise: 8.5 + Math.random() * 2.5 - (model.id === 'bus' || model.id === 'truck' ? 1.5 : 0),
         heading: Math.atan2(d.x, d.z), halfLen, stillFor: 0, blockedByPlayer: 0, claimed: false, colliders: circles,
+        playerAwayFor: 10, angryCooldown: 0, flash: 0, headlights: obj.userData.headlights, glows: this.addGlows(obj, model),
       };
     }
     return null;
   }
+
+  /** Two soft glows in front of the headlights, shown while flashing. */
+  private addGlows(obj: THREE.Group, model: VehicleModel) {
+    return [-1, 1].map((side) => {
+      const g = new THREE.Sprite(this.glowMat);
+      g.scale.setScalar(2.4);
+      g.position.set(side * (model.width / 2 - 0.3), model.headlightY, model.length / 2 + 0.3);
+      g.visible = false;
+      obj.add(g);
+      return g;
+    });
+  }
+
+  private glowMat = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d')!;
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,255,240,1)');
+    grad.addColorStop(0.3, 'rgba(255,250,210,0.7)');
+    grad.addColorStop(1, 'rgba(255,250,210,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    return new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+  })();
 
   /** True when every car already let into this crossing is on a path that doesn't clash with ours. */
   private crossingClear(c: Npc) {
@@ -191,7 +226,7 @@ export class CityTraffic {
     return out.length ? [out[0]] : null;
   }
 
-  update(dt: number, player: THREE.Vector3) {
+  update(dt: number, player: THREE.Vector3, playerSpeed = 0, playerHeading = 0, playerHalfLen = 2.3) {
     for (const c of this.cars) {
       const h = c.hop;
       let target = h.turn && c.s > h.straight - 4 ? Math.min(c.cruise, 5.5) : c.cruise;
@@ -223,7 +258,28 @@ export class CityTraffic {
       };
       let carGap = Infinity;
       for (const o of this.cars) if (o !== c) carGap = Math.min(carGap, ahead(o.obj.position, o.halfLen));
-      const playerGap = ahead(player, 2.3);
+      // The player's vehicle can be long (bus, truck): measure to its nearest part, not its middle.
+      const reach = Math.max(0, playerHalfLen - 1.2);
+      const px = Math.sin(playerHeading) * reach, pz = Math.cos(playerHeading) * reach;
+      const playerGap = Math.min(
+        ahead({ x: player.x + px, z: player.z + pz }, 1.2),
+        ahead(player, 1.2),
+        ahead({ x: player.x - px, z: player.z - pz }, 1.2),
+      );
+
+      // Cut off: the player suddenly appears close in front while we're moving.
+      // (Catching up with the player normally doesn't count: they were already in front.)
+      c.angryCooldown -= dt;
+      if (playerGap < Infinity) {
+        const tooClose = playerGap < Math.max(5, c.speed * 1.0);
+        if (c.playerAwayFor > 0.6 && tooClose && c.speed > 4 && Math.abs(playerSpeed) > 2 && c.angryCooldown <= 0) {
+          c.flash = 1.4;
+          c.angryCooldown = 6;
+          this.stats.cutOffs++;
+          this.onCutOff({ name: c.model.name, pos: c.obj.position });
+        }
+        c.playerAwayFor = 0;
+      } else c.playerAwayFor += dt;
       const gap = Math.min(carGap, playerGap);
       if (gap < Infinity) target = Math.min(target, Math.max(0, gap * 1.1));
 
@@ -270,6 +326,17 @@ export class CityTraffic {
       c.heading += dh * Math.min(1, dt * 8);
       c.obj.position.set(p.x, 0, p.z);
       c.obj.rotation.y = c.heading;
+
+      // Flash the headlights: three quick blinks.
+      if (c.flash > 0) {
+        c.flash -= dt;
+        const on = c.flash > 0 && Math.floor(c.flash * 5) % 2 === 0;
+        c.headlights.emissiveIntensity = on ? 4 : 0.1;
+        for (const g of c.glows) g.visible = on;
+      } else if (c.glows[0].visible || c.headlights.emissiveIntensity !== 0.7) {
+        c.headlights.emissiveIntensity = 0.7;
+        for (const g of c.glows) g.visible = false;
+      }
       const n = c.colliders.length;
       c.colliders.forEach((col, i) => {
         const off = n === 1 ? 0 : -c.halfLen + col.r + ((2 * c.halfLen - 2 * col.r) * i) / (n - 1);

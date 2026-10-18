@@ -27,6 +27,9 @@ export const PARK: Rect = { minX: 5, maxX: 55, minZ: -55, maxZ: -5 };
 export const GAS: Rect = { minX: -30, maxX: -5, minZ: 30, maxZ: 54 };
 export const FARM: Rect = { minX: 84, maxX: 136, minZ: -55, maxZ: -6 };
 export const GAS_PUMPS: Rect = { minX: -20, maxX: -6, minZ: 35, maxZ: 47 };
+/** The garage workshop (across the road from the gas station) and the bay you park in to swap cars. */
+export const GARAGE: Rect = { minX: 5, maxX: 28, minZ: 35, maxZ: 53 };
+export const GARAGE_BAY: Rect = { minX: 11, maxX: 25, minZ: 38.5, maxZ: 49.5 };
 export const BARN = { x: 112, z: -45 };
 
 export function textTexture(text: string, bg: string, fg: string, w = 512, h = 128) {
@@ -245,6 +248,48 @@ export function createWorld(scene: THREE.Scene): World {
     props.add(gasSign);
   }
 
+  // ---------- Garage: a workshop with an open door facing the main road ----------
+  {
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x5c677d });
+    const trimMat = new THREE.MeshStandardMaterial({ color: 0xffb703 });
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x8d99ae, roughness: 0.9 });
+    const add = (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number, solid = true) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = mesh.receiveShadow = true;
+      props.add(mesh);
+      if (solid) boxCollider(x, z, w, d);
+    };
+    add(23, 0.08, 18, floorMat, 16.5, 0.04, 44, false); // floor + driveway
+    add(0.5, 5, 16, wallMat, 26.75, 2.5, 44); // back wall
+    add(17.5, 5, 0.5, wallMat, 18.25, 2.5, 36.25); // side walls
+    add(17.5, 5, 0.5, wallMat, 18.25, 2.5, 51.75);
+    add(18.4, 0.5, 17, wallMat, 18.2, 5.25, 44, false); // roof
+    add(0.6, 1, 16.5, trimMat, 9.5, 4.5, 44, false); // yellow lintel over the open door
+    for (const z of [36.25, 51.75]) add(0.6, 5, 0.6, trimMat, 9.5, 2.5, z);
+    // Inside: tool cabinet, tyre stacks and a turntable on the floor.
+    add(0.8, 1.6, 3, new THREE.MeshStandardMaterial({ color: 0xe63946 }), 26, 0.8, 41);
+    const tyreGeo = new THREE.TorusGeometry(0.42, 0.18, 8, 16).rotateX(Math.PI / 2);
+    const tyreMat = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.9 });
+    for (const [tx, tz] of [[25.6, 48.6], [24.4, 50.2]]) {
+      for (let k = 0; k < 4; k++) {
+        const t = new THREE.Mesh(tyreGeo, tyreMat);
+        t.position.set(tx, 0.2 + k * 0.36, tz);
+        t.castShadow = true;
+        props.add(t);
+      }
+      colliders.push({ kind: 'circle', x: tx, z: tz, r: 0.65 });
+    }
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 0.06, 40), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }));
+    disc.position.set(18, 0.1, 44);
+    disc.receiveShadow = true;
+    props.add(disc);
+    const sign = signBoard('GARAGE', '#ffb703', '#22223b', 8, 1.8);
+    sign.position.set(9.3, 6.5, 44);
+    sign.rotation.y = Math.PI / 2;
+    props.add(sign);
+  }
+
   // ---------- Stunt park: concrete pad, cones and signs ----------
   {
     const pad = new THREE.Mesh(
@@ -346,7 +391,7 @@ export function createWorld(scene: THREE.Scene): World {
     const x = (rand() * 2 - 1) * (TOWN - 4), z = (rand() * 2 - 1) * (TOWN - 4);
     const r = Math.max(w, d) / 2 + 2;
     if (roadDist(x, z) < ROAD_W / 2 + r || overlapsAny(x, z, r, colliders) || Math.hypot(x, z) < 15) continue;
-    if ([PARK, GAS].some((rc) => inRect(rc, x, z, r))) continue;
+    if ([PARK, GAS, GARAGE].some((rc) => inRect(rc, x, z, r))) continue;
     houseBatch.add(unitBox, HOUSE_COLORS[Math.floor(rand() * HOUSE_COLORS.length)], { x, y: h / 2, z }, 0, { x: w, y: h, z: d });
     houseBatch.add(roofGeo, ROOF_COLORS[Math.floor(rand() * ROOF_COLORS.length)], { x, y: h + 1.1, z }, 0, { x: w * 0.78, y: 2.2, z: d * 0.78 });
     // Door and two windows on the side facing the nearest road.
@@ -382,7 +427,7 @@ export function createWorld(scene: THREE.Scene): World {
     const country = Math.max(Math.abs(x), Math.abs(z)) > TOWN;
     if (!country && rand() < 0.5) continue;
     if (roadDist(x, z) < ROAD_W / 2 + 1.5 || overlapsAny(x, z, 2, colliders) || Math.hypot(x, z) < 12) continue;
-    if ([PARK, GAS, FARM].some((rc) => inRect(rc, x, z, 2)) || rampClear(x, z)) continue;
+    if ([PARK, GAS, FARM, GARAGE].some((rc) => inRect(rc, x, z, 2)) || rampClear(x, z)) continue;
     if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 4) continue;
     const s = 0.8 + rand() * 0.6;
     addTree(x, z, s, country && rand() < 0.45);

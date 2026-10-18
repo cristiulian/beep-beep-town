@@ -19,9 +19,19 @@ export interface CarModel {
   wheelRadius: number;
 }
 
+export interface Handling {
+  maxSpeed: number;
+  accel: number;
+  turn: number;
+}
+
 export interface CarDef {
   id: string;
   name: string;
+  emoji: string;
+  length: number;
+  width: number;
+  handling: Handling;
   defaultColors: CarColors;
   build: () => CarModel;
 }
@@ -329,20 +339,19 @@ export const CARS: CarDef[] = [
   {
     id: 'rav4',
     name: 'RAV4',
+    emoji: '🚙',
+    length: 4.6,
+    width: 1.86,
+    handling: { maxSpeed: 21, accel: 10, turn: 1.8 },
     defaultColors: { body: '#a8a99a', roof: '#1b1c1e', rims: '#1b1c1e' },
     build: buildRav4,
   },
 ];
 
-const MAX_SPEED = 21;
 const MAX_REVERSE = 7;
-const ACCEL = 10;
 const BRAKE = 24;
 const COAST = 4;
-const TURN_RATE = 1.8;
 const GRAVITY = 25;
-const HALF_LEN = 1.3; // two collision circles, front and back
-const COLLIDE_R = 1.0;
 
 export interface DriveEnv {
   colliders: Collider[];
@@ -369,10 +378,20 @@ export class Car {
   private roll = 0;
   private spin = 0;
   private bumpTimer = 0;
+  readonly def: CarDef;
+  /** Collision circles along the body (front, middle, back) and their radius. */
+  private circleOffsets: number[];
+  private collideR: number;
+  private halfLen: number;
 
   constructor(def: CarDef, colors: CarColors) {
+    this.def = def;
     this.model = def.build();
     this.setColors(colors);
+    this.halfLen = def.length / 2;
+    this.collideR = def.width / 2 + 0.07;
+    const reach = Math.max(0, this.halfLen - this.collideR);
+    this.circleOffsets = reach > 2 ? [reach, 0, -reach] : [reach, -reach];
   }
 
   get position() {
@@ -393,12 +412,13 @@ export class Car {
   update(dt: number, throttle: number, steer: number, env: DriveEnv): DriveEvents {
     const ev: DriveEvents = { bump: 0, landed: 0 };
     this.steer += (steer - this.steer) * Math.min(1, dt * 8);
-    const max = MAX_SPEED * env.speedScale;
+    const { maxSpeed, accel, turn } = this.def.handling;
+    const max = maxSpeed * env.speedScale;
 
     if (this.grounded) {
       if (throttle !== 0) {
         const braking = Math.abs(this.speed) > 0.5 && Math.sign(throttle) !== Math.sign(this.speed);
-        this.speed += throttle * (braking ? BRAKE : ACCEL) * dt;
+        this.speed += throttle * (braking ? BRAKE : accel) * dt;
       } else {
         const d = COAST * dt;
         this.speed = Math.abs(this.speed) <= d ? 0 : this.speed - Math.sign(this.speed) * d;
@@ -408,7 +428,7 @@ export class Car {
       if (this.speed > max) this.speed = Math.max(max, this.speed - BRAKE * dt);
       this.speed = Math.max(this.speed, -MAX_REVERSE);
       const grip = THREE.MathUtils.clamp(this.speed / 4, -1, 1);
-      this.heading -= this.steer * TURN_RATE * grip * dt;
+      this.heading -= this.steer * turn * grip * dt;
     } else {
       this.heading -= this.steer * 0.4 * dt; // a little air steering
     }
@@ -422,10 +442,10 @@ export class Car {
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     const c = new THREE.Vector3();
     let hit = false;
-    for (const off of [HALF_LEN, -HALF_LEN]) {
+    for (const off of this.circleOffsets) {
       for (const col of env.colliders) {
         c.set(pos.x + fx * off, 0, pos.z + fz * off);
-        if (resolveCircle(c, COLLIDE_R, col)) {
+        if (resolveCircle(c, this.collideR, col)) {
           pos.x = c.x - fx * off;
           pos.z = c.z - fz * off;
           hit = true;
@@ -481,12 +501,13 @@ export class Car {
     let targetPitch: number, targetRoll: number;
     if (this.grounded) {
       // Tilt to match the ground under the wheels.
-      const hf = env.ground(p.x + fx * 1.35, p.z + fz * 1.35);
-      const hb = env.ground(p.x - fx * 1.35, p.z - fz * 1.35);
-      const hl = env.ground(p.x + fz * 0.8, p.z - fx * 0.8);
-      const hr = env.ground(p.x - fz * 0.8, p.z + fx * 0.8);
-      targetPitch = -Math.atan2(hf - hb, 2.7);
-      targetRoll = Math.atan2(hl - hr, 1.6);
+      const a = this.halfLen * 0.6, w = this.def.width * 0.43;
+      const hf = env.ground(p.x + fx * a, p.z + fz * a);
+      const hb = env.ground(p.x - fx * a, p.z - fz * a);
+      const hl = env.ground(p.x + fz * w, p.z - fx * w);
+      const hr = env.ground(p.x - fz * w, p.z + fx * w);
+      targetPitch = -Math.atan2(hf - hb, 2 * a);
+      targetRoll = Math.atan2(hl - hr, 2 * w);
     } else {
       targetPitch = -Math.atan2(this.vy, Math.max(Math.abs(this.speed), 4)) * 0.6;
       targetRoll = 0;
@@ -500,7 +521,7 @@ export class Car {
     for (const s of m.spinners) s.rotation.x = this.spin;
     for (const pv of m.steerPivots) pv.rotation.y = -this.steer * 0.45;
 
-    const lean = this.steer * Math.min(Math.abs(this.speed) / MAX_SPEED, 1) * 0.06;
+    const lean = this.steer * Math.min(Math.abs(this.speed) / this.def.handling.maxSpeed, 1) * 0.06;
     m.body.rotation.z += (lean - m.body.rotation.z) * Math.min(1, dt * 6);
 
     this.bumpTimer = Math.max(0, this.bumpTimer - dt);

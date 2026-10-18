@@ -94,6 +94,7 @@ button {
   background: #7ccf5a;
 }
 body.in-garage #minimap,
+body.in-garage #banner,
 body.in-garage #nav,
 body.in-garage #fuel {
   display: none;
@@ -232,7 +233,7 @@ body.in-garage #garage-btn {
   position: fixed;
   left: 50%;
   bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  width: min(720px, calc(100% - 32px));
+  width: min(880px, calc(100% - 32px));
   transform: translate(-50%, 140%);
   background: var(--panel);
   border-radius: 28px;
@@ -287,6 +288,55 @@ body.in-garage #garage-btn {
   outline: 4px solid var(--ink);
   outline-offset: 2px;
   transform: scale(1.1);
+}
+/* Car picker: only usable at the garage. */
+.car-picker {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+  margin-bottom: 4px;
+  scrollbar-width: thin;
+}
+.car-picker[hidden] {
+  display: none;
+}
+.car-card {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 82px;
+  padding: 6px 4px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.05);
+  border: 3px solid transparent;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+}
+.car-card .emoji {
+  font-size: 34px;
+  line-height: 1.1;
+}
+.car-card.selected {
+  border-color: var(--ink);
+  background: #fff3c4;
+}
+.swap-hint {
+  display: block;
+  width: 100%;
+  margin: 2px 0 6px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #fff3c4;
+  font-size: 16px;
+  font-weight: 800;
+}
+.swap-hint[hidden] {
+  display: none;
 }
 #drive-btn {
   display: block;

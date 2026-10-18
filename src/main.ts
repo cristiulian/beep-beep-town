@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import './style.css';
-import { Car, CarColors, CARS } from './car';
-import { BARN, FARM, GAS, GAS_PUMPS, PARK, createWorld } from './world';
+import { Car, CarColors, CarDef, CARS } from './car';
+import { playableDefs } from './vehicles';
+import { BARN, FARM, GARAGE_BAY, GAS, GAS_PUMPS, PARK, createWorld } from './world';
 import { Axis, Traffic } from './traffic';
 import { Animals } from './animals';
 import { CityTraffic } from './citytraffic';
@@ -51,8 +52,10 @@ function writeSave(s: Save) {
   } catch {}
 }
 const save = loadSave();
-const carDef = CARS.find((c) => c.id === save.carId) ?? CARS[0];
-const colors: CarColors = { ...carDef.defaultColors, ...save.colors[carDef.id] };
+/** Everything you can drive: the RAV4 plus every vehicle in the town library. */
+const ALL_CARS: CarDef[] = [...CARS, ...playableDefs()];
+let carDef = ALL_CARS.find((c) => c.id === save.carId) ?? ALL_CARS[0];
+let colors: CarColors = { ...carDef.defaultColors, ...save.colors[carDef.id] };
 
 // ---------- Scene ----------
 const isTouch = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
@@ -85,35 +88,38 @@ const world = createWorld(scene);
 const traffic = new Traffic(scene);
 const animals = new Animals(scene, world.colliders);
 const city = new CityTraffic(scene, traffic, world.colliders, 10);
-const car = new Car(carDef, colors);
+let car = new Car(carDef, colors);
 scene.add(car.model.root);
 const guide = new GuideLine(scene);
 // Keeps the chevrons crisp far down the road instead of blurring out.
 (guide.mesh.material as THREE.MeshBasicMaterial).map!.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 const PUMP = { x: -13, z: 38 };
-// A big bobbing ⛽ over the station while the guide is on.
-const pumpMarker = (() => {
+const BAY = { x: 18, z: 44 };
+// Big bobbing signs over the destination while the guide is on.
+function marker(icon: string, bg: string, x: number, z: number) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const g = c.getContext('2d')!;
-  g.fillStyle = '#e63946';
+  g.fillStyle = bg;
   g.beginPath();
   g.arc(64, 64, 60, 0, Math.PI * 2);
   g.fill();
   g.font = '72px sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText('⛽', 64, 70);
+  g.fillText(icon, 64, 70);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, fog: false }));
   sp.scale.setScalar(5);
-  sp.position.set(-13, 10, 41);
+  sp.position.set(x, 10, z);
   sp.renderOrder = 3;
   sp.visible = false;
   scene.add(sp);
   return sp;
-})();
+}
+const pumpMarker = marker('⛽', '#e63946', -13, 41);
+const garageMarker = marker('🔧', '#ffb703', BAY.x, BAY.z);
 
 const input = new Input();
 const sound = new Sound();
@@ -125,6 +131,10 @@ input.onHorn = () => {
 };
 animals.onSound = (s) => sound.animal(s);
 city.onHonk = (pos) => sound.carHorn(pos.distanceTo(car.position));
+city.onCutOff = ({ name, pos }) => {
+  sound.angryHorn(pos.distanceTo(car.position));
+  showBanner(`😠 HONK! You cut off the ${name}!`, 2.5, 2);
+};
 
 // ---------- Sparkle particles ----------
 interface Particle { mesh: THREE.Mesh; vel: THREE.Vector3; life: number; }
@@ -286,6 +296,7 @@ function drawMinimap(t: number) {
   mapCtx.scale(pulse, pulse);
   mapCtx.fillText('⛽', 0, 0);
   mapCtx.restore();
+  mapCtx.fillText('🔧', mx(BAY.x), mz(BAY.z));
   for (const s of world.stars) {
     if (!s.visible) continue;
     mapCtx.fillStyle = '#ffd60a';
@@ -389,27 +400,101 @@ function refreshSwatches() {
   for (const [k, el] of partNames) el.textContent = colorName(colors[k]);
 }
 refreshSwatches();
-function setGarage(open: boolean) {
+// Car picker cards (only clickable when you're at the garage).
+const picker = $('car-picker');
+const swapHint = $('swap-hint');
+const garageTitle = $('garage-title');
+let atShop = false;
+for (const def of ALL_CARS) {
+  const card = document.createElement('button');
+  card.className = 'car-card';
+  card.dataset.car = def.id;
+  card.setAttribute('role', 'radio');
+  card.innerHTML = `<span class="emoji">${def.emoji}</span><span>${def.name}</span>`;
+  card.addEventListener('click', () => switchCar(def));
+  picker.appendChild(card);
+}
+function refreshPicker() {
+  picker.querySelectorAll<HTMLElement>('.car-card').forEach((c) => {
+    const on = c.dataset.car === carDef.id;
+    c.classList.toggle('selected', on);
+    c.setAttribute('aria-checked', String(on));
+  });
+}
+
+/** Swap the player's car for another model, keeping where it is. */
+function switchCar(def: CarDef) {
+  if (def.id === carDef.id) return;
+  const old = car;
+  const oldRoot = old.model.root;
+  const parent = oldRoot.parent;
+  carDef = def;
+  colors = { ...def.defaultColors, ...save.colors[def.id] };
+  car = new Car(def, colors);
+  car.heading = old.heading;
+  const root = car.model.root;
+  root.position.copy(oldRoot.position);
+  root.rotation.copy(oldRoot.rotation);
+  parent?.remove(oldRoot);
+  parent?.add(root);
+  disc.scale.setScalar(Math.max(1, def.length / 4.6));
+  oldRoot.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+  save.carId = def.id;
+  writeSave(save);
+  refreshPicker();
+  refreshSwatches();
+  setTitle();
+  sound.goodDriving();
+}
+
+function setTitle() {
+  garageTitle.innerHTML = atShop ? `🔧 Pick your car, then paint it!` : `🎨 Paint your <span id="car-name"></span>!`;
+  const name = document.getElementById('car-name');
+  if (name) name.textContent = carDef.name;
+  $('garage-btn').setAttribute('aria-label', `Paint your ${carDef.name}`);
+}
+
+function setGarage(open: boolean, shop = false) {
   inGarage = open;
+  atShop = open && shop;
   garage.classList.toggle('open', open);
   document.body.classList.toggle('in-garage', open);
+  picker.hidden = !atShop;
+  swapHint.hidden = atShop;
   const root = car.model.root;
   if (open) {
     parkedAt.copy(root.position);
     car.speed = 0;
     turntable.rotation.y = 0;
+    disc.scale.setScalar(Math.max(1, car.def.length / 4.6));
     turntable.add(root);
     root.position.set(0, 0, 0);
     root.rotation.set(0, Math.PI * 0.2, 0);
     sound.engine(0);
+    if (atShop) guideToGarage = false;
+    setTitle();
+    refreshPicker();
   } else {
     scene.add(root);
     root.position.copy(parkedAt);
+    if (shop) {
+      // Leaving the garage: park in the bay facing the door, ready to drive out.
+      root.position.set(BAY.x - 2, 0, BAY.z);
+      car.heading = -Math.PI / 2;
+      shopArmed = false;
+    }
   }
 }
 $('garage-btn').addEventListener('click', () => setGarage(true));
-$('drive-btn').addEventListener('click', () => setGarage(false));
-$('car-name').textContent = carDef.name;
+$('drive-btn').addEventListener('click', () => setGarage(false, atShop));
+swapHint.addEventListener('click', () => {
+  guideToGarage = true;
+  setGarage(false);
+  showBanner('🔧 Follow the arrows to the Garage', 2.5, 2);
+});
+let guideToGarage = false;
+let shopArmed = true; // you have to drive out of the bay before it opens again
+setTitle();
 
 // ---------- Traffic light rules ----------
 let waiting: { i: (typeof traffic.intersections)[number]; axis: Axis } | null = null;
@@ -450,20 +535,33 @@ function checkTraffic() {
 // ---------- Route to the gas station ----------
 const navChip = $('nav');
 const navDist = $('nav-dist');
+const navIcon = $('nav-icon');
 function updateGuide(dt: number, t: number) {
   const p = car.position;
   const atPumps = p.x > GAS_PUMPS.minX && p.x < GAS_PUMPS.maxX && p.z > GAS_PUMPS.minZ && p.z < GAS_PUMPS.maxZ;
   if (fuel >= 1 && atPumps) guideByTap = false;
-  const on = (fuel < 0.25 || guideByTap) && !(atPumps && fuel >= 0.25);
-  guide.mesh.visible = pumpMarker.visible = on;
+  // Fuel comes first; otherwise lead the way to the garage if asked.
+  const toGas = (fuel < 0.25 || guideByTap) && !(atPumps && fuel >= 0.25);
+  const toGarage = !toGas && guideToGarage;
+  const on = toGas || toGarage;
+  guide.mesh.visible = on;
+  pumpMarker.visible = toGas;
+  garageMarker.visible = toGarage;
   navChip.hidden = !on;
   if (!on) return;
   const here = { x: p.x, z: p.z };
-  const inStation = p.x > GAS.minX && p.x < GAS.maxX && p.z > GAS.minZ && p.z < GAS.maxZ;
-  const route = inStation ? [here, PUMP] : [...roadRoute(here, { x: 0, z: PUMP.z }), { x: -6, z: PUMP.z }, PUMP];
+  let route;
+  if (toGas) {
+    const inStation = p.x > GAS.minX && p.x < GAS.maxX && p.z > GAS.minZ && p.z < GAS.maxZ;
+    route = inStation ? [here, PUMP] : [...roadRoute(here, { x: 0, z: PUMP.z }), { x: -6, z: PUMP.z }, PUMP];
+  } else {
+    const inYard = p.x > 4 && p.x < GARAGE_BAY.maxX && p.z > GARAGE_BAY.minZ - 3 && p.z < GARAGE_BAY.maxZ + 3;
+    route = inYard ? [here, BAY] : [...roadRoute(here, { x: 0, z: BAY.z }), { x: 6, z: BAY.z }, BAY];
+  }
+  navIcon.textContent = toGas ? '⛽' : '🔧';
   guide.set(route, dt);
   navDist.textContent = String(Math.max(0, Math.round(guide.length / 5) * 5));
-  pumpMarker.position.y = 10 + Math.sin(t * 3) * 0.6;
+  pumpMarker.position.y = garageMarker.position.y = 10 + Math.sin(t * 3) * 0.6;
 }
 
 // ---------- Loop ----------
@@ -476,7 +574,10 @@ const clock = new THREE.Clock();
 function placeCamera(dt: number, snap = false) {
   const p = car.position;
   const f = car.forward;
-  const wantPos = new THREE.Vector3(p.x - f.x * 9, p.y + 4.6, p.z - f.z * 9);
+  // Bigger vehicles get a camera further back, so the bus still fits on screen.
+  const extra = Math.max(0, car.def.length - 4.6);
+  const back = 9 + extra * 0.9, up = 4.6 + extra * 0.35;
+  const wantPos = new THREE.Vector3(p.x - f.x * back, p.y + up, p.z - f.z * back);
   // Never let the camera dip into a hill.
   wantPos.y = Math.max(wantPos.y, groundHeight(wantPos.x, wantPos.z) + 2);
   const wantLook = new THREE.Vector3(p.x + f.x * 3, p.y + 1.2, p.z + f.z * 3);
@@ -534,7 +635,9 @@ function render() {
     const panelFrac = Math.min(garage.offsetHeight / window.innerHeight, 0.62);
     showCam.aspect = aspect;
     showCam.setViewOffset(window.innerWidth, window.innerHeight, 0, (panelFrac * window.innerHeight) / 2, window.innerWidth, window.innerHeight);
-    const dist = aspect < 1 ? 7.5 / aspect : 10;
+    // Long vehicles (bus, truck) need the camera further back to fit.
+    const size = Math.max(1, car.def.length / 4.6) ** 0.85;
+    const dist = (aspect < 1 ? 7.5 / aspect : 10) * size;
     showCam.position.set(0, dist * 0.3, dist);
     showCam.lookAt(0, 0.8, 0);
     renderer.render(showroom, showCam);
@@ -556,7 +659,7 @@ function tick(dt: number) {
 
   const water = inPond(car.position.x, car.position.z);
   const speedScale = (fuel <= 0 ? 0.3 : 1) * (water ? 0.45 : 1);
-  city.update(dt, car.position);
+  city.update(dt, car.position, car.speed, car.heading, car.def.length / 2);
   const ev = car.update(dt, override?.throttle ?? input.throttle, override?.steer ?? input.steer, { colliders: world.colliders, ground: groundHeight, speedScale });
   if (ev.bump > 2) {
     sound.boing();
@@ -606,6 +709,15 @@ function tick(dt: number) {
   }
   refreshFuel();
   updateGuide(dt, t);
+
+  // Pull into the garage bay and stop: the garage opens with the car picker.
+  const inBay = p.x > GARAGE_BAY.minX && p.x < GARAGE_BAY.maxX && p.z > GARAGE_BAY.minZ && p.z < GARAGE_BAY.maxZ;
+  if (!inBay) shopArmed = true;
+  else if (shopArmed && Math.abs(car.speed) < 1.5) {
+    shopArmed = false;
+    sound.goodDriving();
+    setGarage(true, true);
+  }
 
   // Collect stars.
   for (const s of world.stars) {
@@ -670,7 +782,13 @@ window.addEventListener('resize', () => {
 
 // Handy for testing from the browser console.
 (window as unknown as { game: unknown }).game = {
-  car, world, traffic, animals, input, renderer, guide, city,
+  get car() {
+    return car;
+  },
+  world, traffic, animals, input, renderer, guide, city, setGarage, switchCar, ALL_CARS,
+  get atShop() {
+    return atShop;
+  },
   setFuel: (f: number) => (fuel = f),
   /** Run the game at a steady 60 fps for `secs`, holding the given controls. Returns jump info. */
   sim(secs: number, throttle = 0, steer = 0) {
