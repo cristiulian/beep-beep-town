@@ -1,4 +1,5 @@
 :root {
+  --btn: clamp(64px, min(19vw, 20vh), 112px); /* driving button size, shared with the pop-ups */
   --ink: #22223b;
   --panel: rgba(255, 255, 255, 0.92);
   --accent: #ff7b00;
@@ -148,30 +149,41 @@ body.in-garage #fuel {
 .fuel {
   cursor: pointer;
 }
+/* Pop-up messages: small, at the bottom, between the steering and pedal buttons. */
 #banner {
   position: fixed;
-  top: 24%;
   left: 50%;
-  transform: translate(-50%, -20px) scale(0.8);
-  max-width: calc(100% - 32px);
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  transform: translate(-50%, 12px);
+  width: max-content;
+  max-width: min(460px, calc(100% - 4 * var(--btn) - 88px));
   text-align: center;
   background: var(--panel);
-  border-radius: 24px;
-  padding: 10px 28px;
-  font-size: clamp(18px, min(5vw, 6vh), 40px);
+  border-radius: 16px;
+  padding: 7px 16px;
+  font-size: 16px;
+  line-height: 1.25;
   font-weight: 800;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12);
   opacity: 0;
-  transition: all 0.3s;
+  transition: opacity 0.25s, transform 0.25s;
   pointer-events: none;
+}
+/* Narrow screens have no room between the buttons: sit just above them instead. */
+@media (max-width: 700px) {
+  #banner {
+    bottom: calc(18px + var(--btn) * 1.4 + 12px + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100% - 32px);
+    font-size: 15px;
+  }
 }
 #banner.show {
   opacity: 1;
-  transform: translate(-50%, 0) scale(1);
+  transform: translate(-50%, 0);
 }
 
 /* On-screen driving buttons: always shown, so the game works on tablets, phones and with a mouse. */
 #controls {
-  --btn: clamp(64px, min(19vw, 20vh), 112px);
   position: fixed;
   bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   left: max(16px, env(safe-area-inset-left, 0px));
@@ -216,8 +228,10 @@ body.in-garage #garage-btn {
 }
 /* With a mouse the buttons are a backup to the keyboard, so keep them out of the way. */
 @media (pointer: fine) {
-  #controls {
+  :root {
     --btn: 64px;
+  }
+  #controls {
     opacity: 0.8;
   }
 }
@@ -391,9 +405,12 @@ body.in-garage #garage-btn {
     height: 30px;
   }
   .round {
-    width: 54px;
-    height: 54px;
-    font-size: 26px;
+    width: 46px;
+    height: 46px;
+    font-size: 22px;
+  }
+  .hud-right {
+    gap: 8px;
   }
   .pill {
     font-size: 28px;
