@@ -111,6 +111,10 @@ interface Npc {
   blockedByPlayer: number;
   /** Has been let into the crossing ahead (holds it until through). */
   claimed: boolean;
+  /** Order of entering the crossing: whoever got in first goes first. */
+  claimedAt: number;
+  /** Why the car is slowing right now (for debugging jams). */
+  reason: string;
   /** Seconds since the player was last in front of us in our lane. */
   playerAwayFor: number;
   angryCooldown: number;
@@ -124,6 +128,7 @@ interface Npc {
 export class CityTraffic {
   cars: Npc[] = [];
   /** Running totals, used by the automated tests to check the rules are kept. */
+  private claimSeq = 0;
   stats = { redLightsRun: 0, overlaps: 0, tripsDone: 0, metres: 0, longestWait: 0, cutOffs: 0 };
   debug: unknown[] | null = null;
   /** Called when a car has been stuck behind the player for a while. */
@@ -168,11 +173,16 @@ export class CityTraffic {
       obj.position.set(p.x, 0, p.z);
       return {
         model, obj, from, to, plan, hop, s, speed: 0, cruise: 8.5 + Math.random() * 2.5 - (model.id === 'bus' || model.id === 'truck' ? 1.5 : 0),
-        heading: Math.atan2(d.x, d.z), halfLen, stillFor: 0, blockedByPlayer: 0, claimed: false, colliders: circles,
-        playerAwayFor: 10, angryCooldown: 0, flash: 0, headlights: obj.userData.headlights, glows: this.addGlows(obj, model),
+        heading: Math.atan2(d.x, d.z), halfLen, stillFor: 0, blockedByPlayer: 0, claimed: false, claimedAt: 0, colliders: circles,
+        reason: '', playerAwayFor: 10, angryCooldown: 0, flash: 0, headlights: obj.userData.headlights, glows: this.addGlows(obj, model),
       };
     }
     return null;
+  }
+
+  private claim(c: Npc) {
+    c.claimed = true;
+    c.claimedAt = ++this.claimSeq;
   }
 
   /** Two soft glows in front of the headlights, shown while flashing. */
@@ -230,21 +240,28 @@ export class CityTraffic {
     for (const c of this.cars) {
       const h = c.hop;
       let target = h.turn && c.s > h.straight - 4 ? Math.min(c.cruise, 5.5) : c.cruise;
+      c.reason = '';
 
       // At the line: stop for red (and yellow if there's room), and only enter the crossing
       // when nobody already in it is on a clashing path.
       if (!c.claimed) {
         const toLine = h.stopAt - c.s;
-        if (toLine < -0.3) c.claimed = true; // already over the line: carry on through
-        else {
+        if (toLine < -2.5 || (toLine < -0.3 && this.crossingClear(c))) this.claim(c); // over the line: carry on through
+        else if (toLine < -0.3) {
+          target = 0; // rolled over the line but the crossing is busy: wait
+          c.reason = 'waiting for the crossing to clear';
+        } else {
           const light = this.lights.state(this.lights.intersections.find((i) => i.x === h.at.x && i.z === h.at.z)!, h.axis);
           const canStop = toLine > (c.speed * c.speed) / (2 * 8) - 0.5;
           let stop = light === 'red' || (light === 'yellow' && canStop);
           if (!stop && toLine < 4) {
-            if (this.crossingClear(c)) c.claimed = true;
+            if (this.crossingClear(c)) this.claim(c);
             else stop = true;
           }
-          if (stop) target = Math.min(target, toLine < 0.2 ? 0 : Math.sqrt(2 * 6 * toLine));
+          if (stop) {
+            target = Math.min(target, toLine < 0.2 ? 0 : Math.sqrt(2 * 6 * toLine));
+            c.reason = light === 'green' ? 'waiting for the crossing to clear' : `light ${light}`;
+          }
         }
       }
 
@@ -257,7 +274,20 @@ export class CityTraffic {
         return along - c.halfLen - half - 1.8;
       };
       let carGap = Infinity;
-      for (const o of this.cars) if (o !== c) carGap = Math.min(carGap, ahead(o.obj.position, o.halfLen));
+      for (const o of this.cars) {
+        if (o === c) continue;
+        if (c.claimed && same(o.hop.at, h.at)) {
+          // Inside a crossing: cars still behind their stop lines aren't in our way,
+          // and cars that got in after us wait for us (so two cars can never wait on each other).
+          if (!o.claimed && o.hop.stopAt - o.s > -0.5) continue;
+          if (o.claimed && o.claimedAt > c.claimedAt) continue;
+        }
+        const gp = ahead(o.obj.position, o.halfLen);
+        if (gp < carGap) {
+          carGap = gp;
+          if (gp < 3) c.reason = `behind ${o.model.id}`;
+        }
+      }
       // The player's vehicle can be long (bus, truck): measure to its nearest part, not its middle.
       const reach = Math.max(0, playerHalfLen - 1.2);
       const px = Math.sin(playerHeading) * reach, pz = Math.cos(playerHeading) * reach;

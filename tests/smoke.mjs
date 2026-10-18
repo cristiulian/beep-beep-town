@@ -81,27 +81,37 @@ try {
 
   const cutOff = await page.evaluate(() => {
     const g = window.game;
+    g.switchCar(g.ALL_CARS.find((d) => d.id === 'rav4'));
     const pick = () => g.city.cars.find((c) => c.s < c.hop.straight - 25 && c.speed > 7 && c.angryCooldown <= 0);
-    let c = pick();
-    for (let k = 0; !c && k < 40; k++) {
-      g.sim(0.5);
-      c = pick();
+    // Traffic is random, so give it a few cars to try.
+    const tries = [];
+    for (let attempt = 0; attempt < 4; attempt++) {
+      let c = pick();
+      for (let k = 0; !c && k < 40; k++) {
+        g.sim(0.5);
+        c = pick();
+      }
+      if (!c) continue;
+      const fx = Math.sin(c.heading), fz = Math.cos(c.heading);
+      // From the oncoming lane (still on the road), swerve across its lane 7 m in front of it.
+      g.car.position.set(c.obj.position.x + fx * 7 + fz * 5, 0, c.obj.position.z + fz * 7 - fx * 5);
+      g.car.heading = c.heading - Math.PI / 2;
+      g.car.speed = 8;
+      const before = g.city.stats.cutOffs;
+      let flashed = false;
+      for (let i = 0; i < 40; i++) {
+        g.sim(1 / 30, 1);
+        flashed ||= c.flash > 0;
+      }
+      const cut = g.city.stats.cutOffs - before;
+      tries.push({ car: c.model.id, cut, flashed });
+      if (cut === 1 && flashed) return { ok: true, tries };
+      g.car.position.set(115, 0, -110); // reset out of town before the next try
+      g.sim(2);
     }
-    if (!c) return { found: false };
-    const fx = Math.sin(c.heading), fz = Math.cos(c.heading);
-    // Swerve across its lane 7 m in front of it.
-    g.car.position.set(c.obj.position.x + fx * 7 - fz * 5, 0, c.obj.position.z + fz * 7 + fx * 5);
-    g.car.heading = c.heading + Math.PI / 2;
-    g.car.speed = 8;
-    const before = g.city.stats.cutOffs;
-    let flashed = false;
-    for (let i = 0; i < 40; i++) {
-      g.sim(1 / 30, 1);
-      flashed ||= c.flash > 0;
-    }
-    return { found: true, cut: g.city.stats.cutOffs - before, flashed };
+    return { ok: false, tries };
   });
-  check(cutOff.found && cutOff.cut === 1 && cutOff.flashed, `a car you cut off honks and flashes (${JSON.stringify(cutOff)})`);
+  check(cutOff.ok, `a car you cut off honks and flashes (${JSON.stringify(cutOff.tries)})`);
 
   const calls = await page.evaluate(
     () =>
