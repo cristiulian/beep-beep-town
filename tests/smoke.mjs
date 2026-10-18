@@ -11,7 +11,11 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
 const failures = [];
 const check = (ok, msg) => {
   console.log(`${ok ? '✓' : '✗'} ${msg}`);
-  if (!ok) failures.push(msg);
+  if (!ok) {
+    failures.push(msg);
+    // Shows up as an annotation on the GitHub Actions run.
+    if (process.env.GITHUB_ACTIONS) console.log(`::error title=Smoke test::${msg}`);
+  }
 };
 
 try {
