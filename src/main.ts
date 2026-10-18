@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import './style.css';
 import { Car, CarColors, CarDef, CARS } from './car';
 import { playableDefs } from './vehicles';
-import { BARN, FARM, GARAGE_BAY, GAS, GAS_PUMPS, PARK, createWorld } from './world';
+import { BARN, FARM, GARAGE_BAY, GAS, GAS_PUMPS, PARK, SERVICE_BAY, SERVICE_CENTRE, createWorld } from './world';
 import { Axis, Traffic } from './traffic';
 import { Animals } from './animals';
 import { CityTraffic } from './citytraffic';
@@ -120,6 +120,7 @@ function marker(icon: string, bg: string, x: number, z: number) {
 }
 const pumpMarker = marker('⛽', '#e63946', -13, 41);
 const garageMarker = marker('🔧', '#ffb703', BAY.x, BAY.z);
+const serviceMarker = marker('🎨', '#ff70a6', SERVICE_CENTRE.x, SERVICE_CENTRE.z);
 
 const input = new Input();
 const sound = new Sound();
@@ -297,6 +298,7 @@ function drawMinimap(t: number) {
   mapCtx.fillText('⛽', 0, 0);
   mapCtx.restore();
   mapCtx.fillText('🔧', mx(BAY.x), mz(BAY.z));
+  mapCtx.fillText('🎨', mx(SERVICE_CENTRE.x), mz(SERVICE_CENTRE.z));
   for (const s of world.stars) {
     if (!s.visible) continue;
     mapCtx.fillStyle = '#ffd60a';
@@ -383,7 +385,7 @@ for (const part of PARTS) {
     b.addEventListener('click', () => {
       colors[part.key] = c.hex;
       car.setColors(colors);
-      sound.click();
+      sound.spray();
       refreshSwatches();
       save.colors[carDef.id] = { ...colors };
       writeSave(save);
@@ -447,20 +449,28 @@ function switchCar(def: CarDef) {
   sound.goodDriving();
 }
 
+/** Which workshop the panel was opened at: the Garage swaps cars, the Car Service paints them. */
+type Shop = 'garage' | 'service';
+let shop: Shop | null = null;
+const swatchRows = $('swatch-rows');
+
 function setTitle() {
-  garageTitle.innerHTML = atShop ? `🔧 Pick your car, then paint it!` : `🎨 Paint your <span id="car-name"></span>!`;
+  garageTitle.innerHTML = shop === 'garage' ? `🔧 Pick your car!` : `🎨 Paint your <span id="car-name"></span>!`;
   const name = document.getElementById('car-name');
   if (name) name.textContent = carDef.name;
-  $('garage-btn').setAttribute('aria-label', `Paint your ${carDef.name}`);
 }
 
-function setGarage(open: boolean, shop = false) {
+function setGarage(open: boolean, at: Shop | null = null) {
   inGarage = open;
-  atShop = open && shop;
+  const leaving = shop;
+  shop = open ? at : null;
+  atShop = shop === 'garage';
   garage.classList.toggle('open', open);
   document.body.classList.toggle('in-garage', open);
-  picker.hidden = !atShop;
-  swapHint.hidden = atShop;
+  picker.hidden = shop !== 'garage';
+  swatchRows.hidden = shop !== 'service';
+  // Each workshop points you to the other one.
+  swapHint.textContent = shop === 'garage' ? '🎨 Want new colours? Show me the way to the Car Service' : '🔧 Want a different car? Show me the way to the Garage';
   const root = car.model.root;
   if (open) {
     parkedAt.copy(root.position);
@@ -471,29 +481,42 @@ function setGarage(open: boolean, shop = false) {
     root.position.set(0, 0, 0);
     root.rotation.set(0, Math.PI * 0.2, 0);
     sound.engine(0);
-    if (atShop) guideToGarage = false;
+    if (guideTo === shop) guideTo = null;
     setTitle();
     refreshPicker();
   } else {
     scene.add(root);
     root.position.copy(parkedAt);
-    if (shop) {
-      // Leaving the garage: park in the bay facing the door, ready to drive out.
+    // Leaving a workshop: park in its bay facing the door, ready to drive out.
+    if (leaving === 'garage') {
       root.position.set(BAY.x - 2, 0, BAY.z);
       car.heading = -Math.PI / 2;
-      shopArmed = false;
+    } else if (leaving === 'service') {
+      root.position.set(SERVICE_CENTRE.x + 2, 0, SERVICE_CENTRE.z);
+      car.heading = Math.PI / 2;
     }
+    shopArmed = false;
   }
 }
-$('garage-btn').addEventListener('click', () => setGarage(true));
-$('drive-btn').addEventListener('click', () => setGarage(false, atShop));
+$('drive-btn').addEventListener('click', () => setGarage(false));
 swapHint.addEventListener('click', () => {
-  guideToGarage = true;
+  const to: Shop = shop === 'garage' ? 'service' : 'garage';
   setGarage(false);
-  showBanner('🔧 Follow the arrows to the Garage', 2.5, 2);
+  leadTo(to);
 });
-let guideToGarage = false;
-let shopArmed = true; // you have to drive out of the bay before it opens again
+/** Turn on the route line to a workshop. */
+function leadTo(to: Shop) {
+  guideTo = to;
+  showBanner(to === 'garage' ? '🔧 Follow the arrows to the Garage' : '🎨 Follow the arrows to the Car Service', 2.5, 2);
+}
+// The 🎨 button shows the way to the Car Service (tap again to hide it).
+$('garage-btn').addEventListener('click', () => {
+  sound.click();
+  if (guideTo === 'service') guideTo = null;
+  else leadTo('service');
+});
+let guideTo: Shop | null = null;
+let shopArmed = true; // you have to drive out of a bay before it opens again
 setTitle();
 
 // ---------- Traffic light rules ----------
@@ -542,11 +565,12 @@ function updateGuide(dt: number, t: number) {
   if (fuel >= 1 && atPumps) guideByTap = false;
   // Fuel comes first; otherwise lead the way to the garage if asked.
   const toGas = (fuel < 0.25 || guideByTap) && !(atPumps && fuel >= 0.25);
-  const toGarage = !toGas && guideToGarage;
-  const on = toGas || toGarage;
+  const toShop = toGas ? null : guideTo;
+  const on = toGas || toShop !== null;
   guide.mesh.visible = on;
   pumpMarker.visible = toGas;
-  garageMarker.visible = toGarage;
+  garageMarker.visible = toShop === 'garage';
+  serviceMarker.visible = toShop === 'service';
   navChip.hidden = !on;
   if (!on) return;
   const here = { x: p.x, z: p.z };
@@ -554,14 +578,18 @@ function updateGuide(dt: number, t: number) {
   if (toGas) {
     const inStation = p.x > GAS.minX && p.x < GAS.maxX && p.z > GAS.minZ && p.z < GAS.maxZ;
     route = inStation ? [here, PUMP] : [...roadRoute(here, { x: 0, z: PUMP.z }), { x: -6, z: PUMP.z }, PUMP];
-  } else {
+  } else if (toShop === 'garage') {
     const inYard = p.x > 4 && p.x < GARAGE_BAY.maxX && p.z > GARAGE_BAY.minZ - 3 && p.z < GARAGE_BAY.maxZ + 3;
     route = inYard ? [here, BAY] : [...roadRoute(here, { x: 0, z: BAY.z }), { x: 6, z: BAY.z }, BAY];
+  } else {
+    const S = SERVICE_CENTRE;
+    const inYard = p.x < -4 && p.x > SERVICE_BAY.minX && p.z > SERVICE_BAY.minZ - 3 && p.z < SERVICE_BAY.maxZ + 3;
+    route = inYard ? [here, S] : [...roadRoute(here, { x: 0, z: S.z }), { x: -6, z: S.z }, S];
   }
-  navIcon.textContent = toGas ? '⛽' : '🔧';
+  navIcon.textContent = toGas ? '⛽' : toShop === 'garage' ? '🔧' : '🎨';
   guide.set(route, dt);
   navDist.textContent = String(Math.max(0, Math.round(guide.length / 5) * 5));
-  pumpMarker.position.y = garageMarker.position.y = 10 + Math.sin(t * 3) * 0.6;
+  pumpMarker.position.y = garageMarker.position.y = serviceMarker.position.y = 10 + Math.sin(t * 3) * 0.6;
 }
 
 // ---------- Loop ----------
@@ -710,13 +738,14 @@ function tick(dt: number) {
   refreshFuel();
   updateGuide(dt, t);
 
-  // Pull into the garage bay and stop: the garage opens with the car picker.
-  const inBay = p.x > GARAGE_BAY.minX && p.x < GARAGE_BAY.maxX && p.z > GARAGE_BAY.minZ && p.z < GARAGE_BAY.maxZ;
-  if (!inBay) shopArmed = true;
+  // Pull into a workshop bay and stop: the Garage opens the car picker, the Car Service the paint shop.
+  const inRect = (r: { minX: number; maxX: number; minZ: number; maxZ: number }) => p.x > r.minX && p.x < r.maxX && p.z > r.minZ && p.z < r.maxZ;
+  const bay: Shop | null = inRect(GARAGE_BAY) ? 'garage' : inRect(SERVICE_BAY) ? 'service' : null;
+  if (!bay) shopArmed = true;
   else if (shopArmed && Math.abs(car.speed) < 1.5) {
     shopArmed = false;
     sound.goodDriving();
-    setGarage(true, true);
+    setGarage(true, bay);
   }
 
   // Collect stars.
@@ -788,6 +817,9 @@ window.addEventListener('resize', () => {
   world, traffic, animals, input, renderer, guide, city, setGarage, switchCar, ALL_CARS,
   get atShop() {
     return atShop;
+  },
+  get shop() {
+    return shop;
   },
   setFuel: (f: number) => (fuel = f),
   /** Run the game at a steady 60 fps for `secs`, holding the given controls. Returns jump info. */

@@ -335,6 +335,9 @@ body.in-garage #garage-btn {
   font-size: 16px;
   font-weight: 800;
 }
+#swatch-rows[hidden] {
+  display: none;
+}
 .swap-hint[hidden] {
   display: none;
 }

@@ -79,6 +79,26 @@ try {
   });
   check(swapped.id === 'bus' && swapped.speed > 5 && swapped.x < 10, `swapped to the school bus and drove out (${swapped.id}, x=${swapped.x})`);
 
+  const service = await page.evaluate(() => {
+    const g = window.game;
+    // From the main road, turn into the Car Service bay (door faces the road) and stop.
+    g.car.position.set(-2.5, 0, -41);
+    g.car.heading = -Math.PI / 2;
+    g.car.speed = 0;
+    g.sim(1.8, 1);
+    g.sim(2.5, -1);
+    return { shop: g.shop, pickerHidden: document.getElementById('car-picker').hidden, swatchesHidden: document.getElementById('swatch-rows').hidden };
+  });
+  check(service.shop === 'service' && service.pickerHidden && !service.swatchesHidden, `stopping at the Car Service opens the paint shop (${JSON.stringify(service)})`);
+  await page.click('.swatch[data-part=body][data-color="#ff70a6"]');
+  await page.click('#drive-btn');
+  const painted = await page.evaluate(() => {
+    const g = window.game;
+    const r = g.sim(2, 1);
+    return { color: '#' + g.car.model.paint.body.color.getHexString(), x: r.pos[0], shop: g.shop };
+  });
+  check(painted.color === '#ff70a6' && painted.x > -12 && painted.shop === null, `painted the bus pink and drove out (${JSON.stringify(painted)})`);
+
   const cutOff = await page.evaluate(() => {
     const g = window.game;
     g.switchCar(g.ALL_CARS.find((d) => d.id === 'rav4'));

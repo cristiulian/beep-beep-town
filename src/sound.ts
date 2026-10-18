@@ -198,6 +198,11 @@ export class Sound {
     }
   }
 
+  /** Psssht: a short burst from the paint sprayer. */
+  spray() {
+    this.noise(0, 0.35, 0.25, 5000);
+  }
+
   oops() {
     this.tone(700, 0, 0.18, 'square', 0.08);
     this.tone(520, 0.2, 0.25, 'square', 0.08);

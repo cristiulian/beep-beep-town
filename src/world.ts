@@ -30,6 +30,10 @@ export const GAS_PUMPS: Rect = { minX: -20, maxX: -6, minZ: 35, maxZ: 47 };
 /** The garage workshop (across the road from the gas station) and the bay you park in to swap cars. */
 export const GARAGE: Rect = { minX: 5, maxX: 28, minZ: 35, maxZ: 53 };
 export const GARAGE_BAY: Rect = { minX: 11, maxX: 25, minZ: 38.5, maxZ: 49.5 };
+/** The Car Service paint shop (south-west of the centre, door facing the main road) and its bay. */
+export const SERVICE_CENTRE = { x: -18, z: -41 };
+export const SERVICE: Rect = { minX: -28, maxX: -5, minZ: -50, maxZ: -32 };
+export const SERVICE_BAY: Rect = { minX: -25, maxX: -11, minZ: -46.5, maxZ: -35.5 };
 export const BARN = { x: 112, z: -45 };
 
 export function textTexture(text: string, bg: string, fg: string, w = 512, h = 128) {
@@ -248,47 +252,85 @@ export function createWorld(scene: THREE.Scene): World {
     props.add(gasSign);
   }
 
-  // ---------- Garage: a workshop with an open door facing the main road ----------
-  {
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x5c677d });
-    const trimMat = new THREE.MeshStandardMaterial({ color: 0xffb703 });
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x8d99ae, roughness: 0.9 });
+  // ---------- Workshops: the Garage and the Car Service ----------
+  /**
+   * A workshop with an open door. Laid out around its centre with the door towards -x;
+   * `flip` turns it round so the door faces +x. Decorations are placed in the same local space.
+   */
+  const workshop = (
+    cx: number, cz: number, flip: boolean, wall: number, trim: number, label: string, labelBg: string,
+    decorate: (add: (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number, solid?: boolean) => void, at: (x: number, z: number) => [number, number]) => void,
+  ) => {
+    const k = flip ? -1 : 1;
+    const at = (x: number, z: number): [number, number] => [cx + k * x, cz + k * z];
     const add = (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number, solid = true) => {
+      const [wx, wz] = at(x, z);
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
-      mesh.position.set(x, y, z);
+      mesh.position.set(wx, y, wz);
       mesh.castShadow = mesh.receiveShadow = true;
       props.add(mesh);
-      if (solid) boxCollider(x, z, w, d);
+      if (solid) boxCollider(wx, wz, w, d);
     };
-    add(23, 0.08, 18, floorMat, 16.5, 0.04, 44, false); // floor + driveway
-    add(0.5, 5, 16, wallMat, 26.75, 2.5, 44); // back wall
-    add(17.5, 5, 0.5, wallMat, 18.25, 2.5, 36.25); // side walls
-    add(17.5, 5, 0.5, wallMat, 18.25, 2.5, 51.75);
-    add(18.4, 0.5, 17, wallMat, 18.2, 5.25, 44, false); // roof
-    add(0.6, 1, 16.5, trimMat, 9.5, 4.5, 44, false); // yellow lintel over the open door
-    for (const z of [36.25, 51.75]) add(0.6, 5, 0.6, trimMat, 9.5, 2.5, z);
-    // Inside: tool cabinet, tyre stacks and a turntable on the floor.
-    add(0.8, 1.6, 3, new THREE.MeshStandardMaterial({ color: 0xe63946 }), 26, 0.8, 41);
+    const wallMat = new THREE.MeshStandardMaterial({ color: wall });
+    const trimMat = new THREE.MeshStandardMaterial({ color: trim });
+    add(23, 0.08, 18, new THREE.MeshStandardMaterial({ color: 0x8d99ae, roughness: 0.9 }), -1.5, 0.04, 0, false); // floor + driveway
+    add(0.5, 5, 16, wallMat, 8.75, 2.5, 0); // back wall
+    add(17.5, 5, 0.5, wallMat, 0.25, 2.5, -7.75); // side walls
+    add(17.5, 5, 0.5, wallMat, 0.25, 2.5, 7.75);
+    add(18.4, 0.5, 17, wallMat, 0.2, 5.25, 0, false); // roof
+    add(0.6, 1, 16.5, trimMat, -8.5, 4.5, 0, false); // lintel over the open door
+    for (const z of [-7.75, 7.75]) add(0.6, 5, 0.6, trimMat, -8.5, 2.5, z);
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 0.06, 40), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }));
+    disc.position.set(cx, 0.1, cz);
+    disc.receiveShadow = true;
+    props.add(disc);
+    const sign = signBoard(label, labelBg, '#22223b', 8, 1.8);
+    const [sx, sz] = at(-8.7, 0);
+    sign.position.set(sx, 6.5, sz);
+    sign.rotation.y = Math.PI / 2;
+    props.add(sign);
+    decorate(add, at);
+  };
+
+  // The Garage (swap cars): tool cabinet and tyre stacks.
+  workshop(18, 44, false, 0x5c677d, 0xffb703, 'GARAGE', '#ffb703', (add, at) => {
+    add(0.8, 1.6, 3, new THREE.MeshStandardMaterial({ color: 0xe63946 }), 8, 0.8, -3);
     const tyreGeo = new THREE.TorusGeometry(0.42, 0.18, 8, 16).rotateX(Math.PI / 2);
     const tyreMat = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.9 });
-    for (const [tx, tz] of [[25.6, 48.6], [24.4, 50.2]]) {
-      for (let k = 0; k < 4; k++) {
+    for (const [lx, lz] of [[7.6, 4.6], [6.4, 6.2]]) {
+      const [tx, tz] = at(lx, lz);
+      for (let i = 0; i < 4; i++) {
         const t = new THREE.Mesh(tyreGeo, tyreMat);
-        t.position.set(tx, 0.2 + k * 0.36, tz);
+        t.position.set(tx, 0.2 + i * 0.36, tz);
         t.castShadow = true;
         props.add(t);
       }
       colliders.push({ kind: 'circle', x: tx, z: tz, r: 0.65 });
     }
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 0.06, 40), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }));
-    disc.position.set(18, 0.1, 44);
-    disc.receiveShadow = true;
-    props.add(disc);
-    const sign = signBoard('GARAGE', '#ffb703', '#22223b', 8, 1.8);
-    sign.position.set(9.3, 6.5, 44);
-    sign.rotation.y = Math.PI / 2;
-    props.add(sign);
-  }
+  });
+
+  // The Car Service (paint shop): candy-striped walls, paint cans and spray nozzles.
+  workshop(SERVICE_CENTRE.x, SERVICE_CENTRE.z, true, 0xf1f5f9, 0xff70a6, 'CAR SERVICE', '#ff70a6', (add, at) => {
+    const stripeColors = [0xe63946, 0xff7b00, 0xffd60a, 0x80ed99, 0x4cc9f0, 0x7b2cbf];
+    stripeColors.forEach((c, i) => {
+      const m = new THREE.MeshStandardMaterial({ color: c });
+      add(0.06, 0.35, 15, m, 8.48, 0.6 + i * 0.4, 0, false); // rainbow stripes on the back wall
+    });
+    const canGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.6, 14);
+    stripeColors.forEach((c, i) => {
+      const [x, z] = at(7.4 - (i % 3) * 0.8, 5.2 + Math.floor(i / 3) * 0.8);
+      const can = new THREE.Mesh(canGeo, new THREE.MeshStandardMaterial({ color: c, metalness: 0.3, roughness: 0.4 }));
+      can.position.set(x, 0.3, z);
+      can.castShadow = true;
+      props.add(can);
+    });
+    const [px, pz] = at(6.6, 5.6);
+    colliders.push({ kind: 'circle', x: px, z: pz, r: 1.4 });
+    // Overhead spray bar with nozzles.
+    const grey = new THREE.MeshStandardMaterial({ color: 0x8d99ae, metalness: 0.6, roughness: 0.4 });
+    add(0.25, 0.25, 12, grey, 0, 4.4, 0, false);
+    for (let z = -5; z <= 5; z += 2) add(0.18, 0.4, 0.18, grey, 0, 4.1, z, false);
+  });
 
   // ---------- Stunt park: concrete pad, cones and signs ----------
   {
@@ -391,7 +433,7 @@ export function createWorld(scene: THREE.Scene): World {
     const x = (rand() * 2 - 1) * (TOWN - 4), z = (rand() * 2 - 1) * (TOWN - 4);
     const r = Math.max(w, d) / 2 + 2;
     if (roadDist(x, z) < ROAD_W / 2 + r || overlapsAny(x, z, r, colliders) || Math.hypot(x, z) < 15) continue;
-    if ([PARK, GAS, GARAGE].some((rc) => inRect(rc, x, z, r))) continue;
+    if ([PARK, GAS, GARAGE, SERVICE].some((rc) => inRect(rc, x, z, r))) continue;
     houseBatch.add(unitBox, HOUSE_COLORS[Math.floor(rand() * HOUSE_COLORS.length)], { x, y: h / 2, z }, 0, { x: w, y: h, z: d });
     houseBatch.add(roofGeo, ROOF_COLORS[Math.floor(rand() * ROOF_COLORS.length)], { x, y: h + 1.1, z }, 0, { x: w * 0.78, y: 2.2, z: d * 0.78 });
     // Door and two windows on the side facing the nearest road.
@@ -427,7 +469,7 @@ export function createWorld(scene: THREE.Scene): World {
     const country = Math.max(Math.abs(x), Math.abs(z)) > TOWN;
     if (!country && rand() < 0.5) continue;
     if (roadDist(x, z) < ROAD_W / 2 + 1.5 || overlapsAny(x, z, 2, colliders) || Math.hypot(x, z) < 12) continue;
-    if ([PARK, GAS, FARM, GARAGE].some((rc) => inRect(rc, x, z, 2)) || rampClear(x, z)) continue;
+    if ([PARK, GAS, FARM, GARAGE, SERVICE].some((rc) => inRect(rc, x, z, 2)) || rampClear(x, z)) continue;
     if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 4) continue;
     const s = 0.8 + rand() * 0.6;
     addTree(x, z, s, country && rand() < 0.45);
