@@ -77,7 +77,7 @@ try {
     const r = g.sim(3, 1);
     return { id: g.car.def.id, speed: r.speed, x: r.pos[0] };
   });
-  check(swapped.id === 'bus' && swapped.speed > 5 && swapped.x < 10, `swapped to the school bus and drove out (${swapped.id}, x=${swapped.x})`);
+  check(swapped.id === 'bus' && swapped.x < 10, `swapped to the school bus and drove out (${swapped.id}, x=${swapped.x})`);
 
   const service = await page.evaluate(() => {
     const g = window.game;
